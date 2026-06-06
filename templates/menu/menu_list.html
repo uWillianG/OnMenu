@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Menu | OnMenu{% endblock %}
+
+{% block content %}
+  {% if restaurant %}
+    <section class="storefront">
+      <div>
+        <p class="eyebrow">Online menu</p>
+        <h1>{{ restaurant.name }}</h1>
+        <p class="storefront-meta">
+          {% if restaurant.accepts_delivery %}Delivery{% endif %}
+          {% if restaurant.accepts_delivery and restaurant.accepts_pickup %}<span aria-hidden="true"> | </span>{% endif %}
+          {% if restaurant.accepts_pickup %}Pickup{% endif %}
+        </p>
+      </div>
+      {% if restaurant.delivery_fee %}
+        <p class="fee-chip">Delivery fee {{ currency_symbol }} {{ restaurant.delivery_fee|floatformat:2 }}</p>
+      {% endif %}
+    </section>
+
+    {% for category in categories %}
+      <section class="menu-section" id="{{ category.slug }}">
+        <h2>{{ category.name }}</h2>
+        <div class="menu-grid">
+          {% for item in category.items.all %}
+            <article class="menu-card{% if not item.is_available %} is-disabled{% endif %}">
+              <a class="menu-image" href="{% url 'menu:item_detail' item.pk item.slug %}" aria-label="{{ item.name }}">
+                {% if item.image_url %}
+                  <img src="{{ item.image_url }}" alt="{{ item.name }}">
+                {% else %}
+                  <img src="{% static 'img/placeholder-food.svg' %}" alt="">
+                {% endif %}
+              </a>
+              <div class="menu-card-body">
+                <div class="menu-card-heading">
+                  <h3><a href="{% url 'menu:item_detail' item.pk item.slug %}">{{ item.name }}</a></h3>
+                  <strong>{{ currency_symbol }} {{ item.price|floatformat:2 }}</strong>
+                </div>
+                <p>{{ item.description|default:'Freshly prepared by the restaurant.' }}</p>
+                {% if item.is_available %}
+                  <form method="post" action="{% url 'cart:cart_add' item.pk %}" class="inline-cart-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <input type="number" name="quantity" value="1" min="1" aria-label="Quantity for {{ item.name }}">
+                    <button type="submit">Add</button>
+                  </form>
+                {% else %}
+                  <p class="availability">Unavailable</p>
+                {% endif %}
+              </div>
+            </article>
+          {% empty %}
+            <p class="empty-state">No items in this category yet.</p>
+          {% endfor %}
+        </div>
+      </section>
+    {% empty %}
+      <section class="empty-state page-band">
+        <h1>Menu coming soon</h1>
+        <p>Add categories and menu items in the staff admin.</p>
+      </section>
+    {% endfor %}
+  {% else %}
+    <section class="empty-state page-band">
+      <h1>Restaurant setup needed</h1>
+      <p>Create an active restaurant in Django admin to publish the menu.</p>
+    </section>
+  {% endif %}
+{% endblock %}

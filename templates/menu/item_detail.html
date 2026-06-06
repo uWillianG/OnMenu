@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ item.name }} | OnMenu{% endblock %}
+
+{% block content %}
+  <section class="detail-layout">
+    <div class="detail-image">
+      {% if item.image_url %}
+        <img src="{{ item.image_url }}" alt="{{ item.name }}">
+      {% else %}
+        <img src="{% static 'img/placeholder-food.svg' %}" alt="">
+      {% endif %}
+    </div>
+    <div class="detail-copy">
+      <p class="eyebrow">{{ item.category.name }}</p>
+      <h1>{{ item.name }}</h1>
+      <p>{{ item.description|default:'Freshly prepared by the restaurant.' }}</p>
+      <p class="price-line">{{ currency_symbol }} {{ item.price|floatformat:2 }}</p>
+
+      {% if item.is_available %}
+        <form method="post" action="{% url 'cart:cart_add' item.pk %}" class="detail-cart-form">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'cart:cart_detail' %}">
+          <label for="quantity">Quantity</label>
+          <div class="quantity-row">
+            <input id="quantity" type="number" name="quantity" value="1" min="1">
+            <button type="submit">Add to cart</button>
+          </div>
+        </form>
+      {% else %}
+        <p class="availability large">Unavailable</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

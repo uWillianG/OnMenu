@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Staff Orders | OnMenu{% endblock %}
+
+{% block content %}
+  <section class="page-heading split-heading">
+    <h1>Orders</h1>
+    <form method="get" class="filter-form">
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="">All</option>
+        {% for value, label in status_choices %}
+          <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Filter</button>
+    </form>
+  </section>
+
+  <section class="staff-list">
+    {% for order in orders %}
+      <article class="order-card">
+        <div>
+          <h2><a href="{% url 'orders:staff_order_detail' order.order_number %}">{{ order.order_number }}</a></h2>
+          <p>{{ order.customer_name }} | {{ order.get_fulfillment_method_display }} | {{ order.created_at|date:'M j, Y H:i' }}</p>
+        </div>
+        <div>
+          <span class="status-pill">{{ order.get_status_display }}</span>
+          <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong>
+        </div>
+      </article>
+    {% empty %}
+      <p class="empty-state">No orders match this filter.</p>
+    {% endfor %}
+  </section>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Checkout | OnMenu{% endblock %}
+
+{% block content %}
+  <section class="page-heading">
+    <h1>Checkout</h1>
+  </section>
+
+  <section class="checkout-layout">
+    <form method="post" class="checkout-form">
+      {% csrf_token %}
+
+      <fieldset>
+        <legend>Order type</legend>
+        {{ form.fulfillment_method }}
+        {{ form.fulfillment_method.errors }}
+      </fieldset>
+
+      <label for="{{ form.customer_name.id_for_label }}">Name</label>
+      {{ form.customer_name }}
+      {{ form.customer_name.errors }}
+
+      <label for="{{ form.phone.id_for_label }}">Phone</label>
+      {{ form.phone }}
+      {{ form.phone.errors }}
+
+      <label for="{{ form.address.id_for_label }}">Delivery address</label>
+      {{ form.address }}
+      {{ form.address.errors }}
+
+      <label for="{{ form.notes.id_for_label }}">Notes</label>
+      {{ form.notes }}
+      {{ form.notes.errors }}
+
+      <fieldset>
+        <legend>Payment</legend>
+        {{ form.payment_method }}
+        {{ form.payment_method.errors }}
+      </fieldset>
+
+      <button type="submit">Place order</button>
+    </form>
+
+    <aside class="summary-panel">
+      <h2>Order summary</h2>
+      {% for entry in cart_items %}
+        <div class="summary-row">
+          <span>{{ entry.quantity }} x {{ entry.item.name }}</span>
+          <strong>{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</strong>
+        </div>
+      {% endfor %}
+      <div class="summary-row">
+        <span>Subtotal</span>
+        <strong>{{ currency_symbol }} {{ subtotal|floatformat:2 }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Delivery fee</span>
+        <strong>{{ currency_symbol }} {{ delivery_fee|floatformat:2 }}</strong>
+      </div>
+      <div class="summary-row total">
+        <span>Total</span>
+        <strong>{{ currency_symbol }} {{ estimated_total|floatformat:2 }}</strong>
+      </div>
+    </aside>
+  </section>
+{% endblock %}

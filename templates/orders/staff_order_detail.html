@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ order.order_number }} | Staff | OnMenu{% endblock %}
+
+{% block content %}
+  <section class="page-heading split-heading">
+    <div>
+      <p class="eyebrow">Staff order</p>
+      <h1>{{ order.order_number }}</h1>
+    </div>
+    <a class="button-secondary" href="{% url 'orders:staff_order_list' %}">All orders</a>
+  </section>
+
+  <section class="staff-detail-layout">
+    <div class="order-receipt">
+      <h2>{{ order.customer_name }}</h2>
+      <p>{{ order.phone }}</p>
+      <p>{{ order.get_fulfillment_method_display }} | {{ order.get_payment_method_display }}</p>
+      {% if order.address %}
+        <p>{{ order.address|linebreaksbr }}</p>
+      {% endif %}
+      {% if order.notes %}
+        <p>{{ order.notes|linebreaksbr }}</p>
+      {% endif %}
+
+      {% for item in order.items.all %}
+        <div class="summary-row">
+          <span>{{ item.quantity }} x {{ item.item_name }}</span>
+          <strong>{{ currency_symbol }} {{ item.line_total|floatformat:2 }}</strong>
+        </div>
+      {% endfor %}
+      <div class="summary-row total">
+        <span>Total</span>
+        <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong>
+      </div>
+    </div>
+
+    <form method="post" class="status-form">
+      {% csrf_token %}
+      <label for="{{ form.status.id_for_label }}">Status</label>
+      {{ form.status }}
+      <button type="submit">Update status</button>
+    </form>
+  </section>
+{% endblock %}

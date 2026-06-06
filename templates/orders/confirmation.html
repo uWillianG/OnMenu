@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Order {{ order.order_number }} | OnMenu{% endblock %}
+
+{% block content %}
+  <section class="confirmation">
+    <p class="eyebrow">Order received</p>
+    <h1>{{ order.order_number }}</h1>
+    <p>Status: <strong>{{ order.get_status_display }}</strong></p>
+    <p>Total: <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong></p>
+    <a class="button-primary" href="{% url 'menu:menu_list' %}">Back to menu</a>
+  </section>
+
+  <section class="order-receipt">
+    <h2>Receipt</h2>
+    {% for item in order.items.all %}
+      <div class="summary-row">
+        <span>{{ item.quantity }} x {{ item.item_name }}</span>
+        <strong>{{ currency_symbol }} {{ item.line_total|floatformat:2 }}</strong>
+      </div>
+    {% endfor %}
+    <div class="summary-row">
+      <span>Subtotal</span>
+      <strong>{{ currency_symbol }} {{ order.subtotal|floatformat:2 }}</strong>
+    </div>
+    <div class="summary-row">
+      <span>Delivery fee</span>
+      <strong>{{ currency_symbol }} {{ order.delivery_fee|floatformat:2 }}</strong>
+    </div>
+    <div class="summary-row total">
+      <span>Total</span>
+      <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong>
+    </div>
+  </section>
+{% endblock %}
