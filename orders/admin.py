@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderItemOption
+
+
+class OrderItemOptionInline(admin.TabularInline):
+    model = OrderItemOption
+    extra = 0
+    readonly_fields = ('group_name', 'choice_name', 'extra_price')
+    can_delete = False
 
 
 class OrderItemInline(admin.TabularInline):
@@ -14,6 +21,7 @@ class OrderItemInline(admin.TabularInline):
         'line_total',
     )
     can_delete = False
+    show_change_link = True
 
 
 @admin.register(Order)

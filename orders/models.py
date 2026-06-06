@@ -120,3 +120,24 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f'{self.quantity} x {self.item_name}'
+
+
+class OrderItemOption(models.Model):
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.CASCADE,
+        related_name='options',
+    )
+    group_name = models.CharField(max_length=120)
+    choice_name = models.CharField(max_length=120)
+    extra_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+    )
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f'{self.group_name}: {self.choice_name}'

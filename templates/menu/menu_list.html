@@ -1,71 +1,184 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Menu | OnMenu{% endblock %}
+{% block title %}{% if restaurant %}{{ restaurant.name }}{% else %}Cardápio{% endif %} | OnMenu{% endblock %}
 
 {% block content %}
-  {% if restaurant %}
-    <section class="storefront">
-      <div>
-        <p class="eyebrow">Online menu</p>
-        <h1>{{ restaurant.name }}</h1>
-        <p class="storefront-meta">
-          {% if restaurant.accepts_delivery %}Delivery{% endif %}
-          {% if restaurant.accepts_delivery and restaurant.accepts_pickup %}<span aria-hidden="true"> | </span>{% endif %}
-          {% if restaurant.accepts_pickup %}Pickup{% endif %}
-        </p>
-      </div>
-      {% if restaurant.delivery_fee %}
-        <p class="fee-chip">Delivery fee {{ currency_symbol }} {{ restaurant.delivery_fee|floatformat:2 }}</p>
-      {% endif %}
-    </section>
+{% if restaurant %}
 
-    {% for category in categories %}
-      <section class="menu-section" id="{{ category.slug }}">
-        <h2>{{ category.name }}</h2>
-        <div class="menu-grid">
-          {% for item in category.items.all %}
-            <article class="menu-card{% if not item.is_available %} is-disabled{% endif %}">
-              <a class="menu-image" href="{% url 'menu:item_detail' item.pk item.slug %}" aria-label="{{ item.name }}">
-                {% if item.image_url %}
-                  <img src="{{ item.image_url }}" alt="{{ item.name }}">
-                {% else %}
-                  <img src="{% static 'img/placeholder-food.svg' %}" alt="">
-                {% endif %}
-              </a>
-              <div class="menu-card-body">
-                <div class="menu-card-heading">
-                  <h3><a href="{% url 'menu:item_detail' item.pk item.slug %}">{{ item.name }}</a></h3>
-                  <strong>{{ currency_symbol }} {{ item.price|floatformat:2 }}</strong>
-                </div>
-                <p>{{ item.description|default:'Freshly prepared by the restaurant.' }}</p>
-                {% if item.is_available %}
-                  <form method="post" action="{% url 'cart:cart_add' item.pk %}" class="inline-cart-form">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.path }}">
-                    <input type="number" name="quantity" value="1" min="1" aria-label="Quantity for {{ item.name }}">
-                    <button type="submit">Add</button>
-                  </form>
-                {% else %}
-                  <p class="availability">Unavailable</p>
-                {% endif %}
-              </div>
-            </article>
-          {% empty %}
-            <p class="empty-state">No items in this category yet.</p>
+  {# ── Restaurant hero ── #}
+  <section class="restaurant-hero">
+    <div class="hero-inner">
+      <h1>{{ restaurant.name }}</h1>
+      <div class="hero-chips">
+        {% if restaurant.accepts_delivery %}
+          <span class="hero-chip">🛵 Entrega · {{ currency_symbol }} {{ restaurant.delivery_fee|floatformat:2 }}</span>
+        {% endif %}
+        {% if restaurant.accepts_pickup %}
+          <span class="hero-chip">🏪 Retirada grátis</span>
+        {% endif %}
+        {% if is_open is not None %}
+          {% if is_open %}
+            <span class="hero-chip open">🟢 Aberto agora</span>
+          {% else %}
+            <span class="hero-chip closed">🔴 Fechado</span>
+          {% endif %}
+        {% endif %}
+        {% if restaurant.phone %}
+          <span class="hero-chip">📞 {{ restaurant.phone }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# ── Business hours ── #}
+  {% if business_hours %}
+    <details class="hours-details">
+      <summary>🕐 Horário de funcionamento</summary>
+      <table class="hours-table">
+        <tbody>
+          {% for h in business_hours %}
+            <tr>
+              <td>{{ h.get_day_of_week_display }}</td>
+              <td>
+                {% if h.is_closed %}Fechado
+                {% elif h.open_time and h.close_time %}{{ h.open_time|time:"H:i" }} – {{ h.close_time|time:"H:i" }}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
           {% endfor %}
-        </div>
-      </section>
-    {% empty %}
-      <section class="empty-state page-band">
-        <h1>Menu coming soon</h1>
-        <p>Add categories and menu items in the staff admin.</p>
-      </section>
-    {% endfor %}
-  {% else %}
-    <section class="empty-state page-band">
-      <h1>Restaurant setup needed</h1>
-      <p>Create an active restaurant in Django admin to publish the menu.</p>
-    </section>
+        </tbody>
+      </table>
+    </details>
   {% endif %}
+
+  {# ── Category nav ── #}
+  {% if categories %}
+    <nav class="category-nav" aria-label="Categorias">
+      {% if featured_items %}
+        <a href="#destaques" class="cat-link" data-section="destaques">⭐ Destaques</a>
+      {% endif %}
+      {% for cat in categories %}
+        <a href="#{{ cat.slug }}" class="cat-link" data-section="{{ cat.slug }}">{{ cat.name }}</a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+
+  {# ── Two-column layout: content + cart sidebar ── #}
+  <div class="page-wrapper">
+    <div class="menu-layout">
+
+      {# ── Menu content ── #}
+      <div class="menu-content">
+
+        {# ── Destaques ── #}
+        {% if featured_items %}
+          <section class="menu-section" id="destaques">
+            <h2 class="section-title featured">⭐ Destaques</h2>
+            <div class="product-list">
+              {% for item in featured_items %}
+                {% include 'menu/_product_card.html' with item=item %}
+              {% endfor %}
+            </div>
+          </section>
+        {% endif %}
+
+        {# ── Categories ── #}
+        {% for category in categories %}
+          <section class="menu-section" id="{{ category.slug }}">
+            <h2 class="section-title">{{ category.name }}</h2>
+            <div class="product-list">
+              {% for item in category.items.all %}
+                {% include 'menu/_product_card.html' with item=item %}
+              {% empty %}
+                <p style="color:var(--muted);font-size:.9rem">Nenhum item nesta categoria ainda.</p>
+              {% endfor %}
+            </div>
+          </section>
+        {% empty %}
+          <div class="empty-state">
+            <h2>Cardápio em breve</h2>
+            <p>Adicione categorias e itens no painel de administração.</p>
+          </div>
+        {% endfor %}
+
+      </div>{# /menu-content #}
+
+      {# ── Sidebar cart (desktop only) ── #}
+      <aside class="cart-sidebar">
+        <div class="cart-sidebar-inner">
+          <div class="cart-sidebar-head">🛒 Seu pedido</div>
+          {% if cart_items %}
+            <div class="cart-sidebar-items">
+              {% for entry in cart_items %}
+                <div class="sidebar-line">
+                  <div style="flex:1;min-width:0">
+                    <div class="sidebar-line-name">{{ entry.quantity }}× {{ entry.item.name }}</div>
+                    {% for choice in entry.options %}
+                      <div class="sidebar-line-opts">{{ choice.group.name }}: {{ choice.name }}</div>
+                    {% endfor %}
+                  </div>
+                  <div class="sidebar-line-price">{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="cart-sidebar-totals">
+              <div class="total-row"><span>Subtotal</span><span>{{ currency_symbol }} {{ cart.subtotal|floatformat:2 }}</span></div>
+              {% if restaurant.accepts_delivery %}
+                <div class="total-row"><span>Taxa de entrega</span><span>{{ currency_symbol }} {{ restaurant.delivery_fee|floatformat:2 }}</span></div>
+              {% endif %}
+            </div>
+            <div class="cart-sidebar-cta">
+              <a href="{% url 'orders:checkout' %}" class="btn-primary">Fechar pedido</a>
+            </div>
+          {% else %}
+            <div class="cart-empty-msg">Nenhum item adicionado ainda.</div>
+          {% endif %}
+        </div>
+      </aside>
+
+    </div>{# /menu-layout #}
+  </div>{# /page-wrapper #}
+
+{% else %}
+  <div class="page-wrapper">
+    <div class="empty-state">
+      <h2>Restaurante não configurado</h2>
+      <p>Crie um restaurante ativo no Django admin para publicar o cardápio.</p>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const links = document.querySelectorAll('.cat-link[data-section]');
+  const sections = document.querySelectorAll('.menu-section[id]');
+  if (!links.length || !sections.length) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) {
+          links.forEach((l) => l.classList.remove('active'));
+          const active = document.querySelector(`.cat-link[data-section="${e.target.id}"]`);
+          if (active) { active.classList.add('active'); active.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
+        }
+      });
+    },
+    { rootMargin: '-20% 0px -70% 0px' }
+  );
+
+  sections.forEach((s) => observer.observe(s));
+
+  links.forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.getElementById(link.dataset.section);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+})();
+</script>
 {% endblock %}

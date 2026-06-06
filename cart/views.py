@@ -31,7 +31,13 @@ def cart_add(request, item_id):
         messages.warning(request, f'{item.name} is currently unavailable.')
         return redirect(_next_url(request))
 
-    cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1))
+    options = {}
+    for key, value in request.POST.items():
+        if key.startswith('option_group_') and value:
+            group_id = key[len('option_group_'):]
+            options[group_id] = value
+
+    cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options)
     messages.success(request, f'{item.name} was added to your cart.')
     return redirect(_next_url(request))
 

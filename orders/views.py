@@ -1,16 +1,18 @@
 from decimal import Decimal
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from cart.cart import Cart
-from menu.selectors import get_current_restaurant
+from menu.selectors import get_current_restaurant, is_restaurant_open
 
 from .forms import CheckoutForm, OrderStatusForm
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderItemOption
 
 
 @require_http_methods(['GET', 'POST'])
@@ -31,6 +33,11 @@ def checkout(request):
         return redirect('cart:cart_detail')
 
     restaurant = get_current_restaurant() or cart_items[0]['item'].category.restaurant
+
+    if is_restaurant_open(restaurant) is False:
+        messages.warning(request, 'O restaurante está fechado no momento. Tente mais tarde.')
+        return redirect('menu:menu_list')
+
     delivery_fee = restaurant.delivery_fee if restaurant.accepts_delivery else Decimal('0.00')
 
     if request.method == 'POST':
@@ -64,10 +71,37 @@ def checkout(request):
 
 def confirmation(request, order_number):
     order = get_object_or_404(
-        Order.objects.select_related('restaurant').prefetch_related('items'),
+        Order.objects.select_related('restaurant').prefetch_related('items__options'),
         order_number=order_number,
     )
-    return render(request, 'orders/confirmation.html', {'order': order})
+    wa_url = None
+    if order.restaurant.whatsapp_number:
+        items_text = '\n'.join(
+            f'{i.quantity}x {i.item_name} - R$ {i.line_total}'
+            for i in order.items.all()
+        )
+        msg = (
+            f'Olá! Acabei de fazer um pedido.\n'
+            f'Número: {order.order_number}\n'
+            f'Itens:\n{items_text}\n'
+            f'Total: R$ {order.total}\n'
+            f'Pagamento: {order.get_payment_method_display()}'
+        )
+        if order.fulfillment_method == Order.FulfillmentMethod.DELIVERY and order.address:
+            msg += f'\nEndereço: {order.address}'
+        wa_url = f'https://wa.me/{order.restaurant.whatsapp_number}?text={quote(msg)}'
+
+    return render(request, 'orders/confirmation.html', {'order': order, 'wa_url': wa_url})
+
+
+def track_order(request, order_number):
+    order = get_object_or_404(Order, order_number=order_number)
+    if request.GET.get('json'):
+        return JsonResponse({
+            'status': order.status,
+            'status_display': order.get_status_display(),
+        })
+    return render(request, 'orders/track_order.html', {'order': order})
 
 
 @staff_member_required
@@ -95,7 +129,7 @@ def staff_order_list(request):
 @require_http_methods(['GET', 'POST'])
 def staff_order_detail(request, order_number):
     order = get_object_or_404(
-        Order.objects.select_related('restaurant').prefetch_related('items'),
+        Order.objects.select_related('restaurant').prefetch_related('items__options'),
         order_number=order_number,
     )
 
@@ -132,13 +166,20 @@ def _create_order_from_cart(form, cart, cart_items, restaurant):
 
     for entry in cart_items:
         item = entry['item']
-        OrderItem.objects.create(
+        order_item = OrderItem.objects.create(
             order=order,
             menu_item=item,
             item_name=item.name,
-            unit_price=item.price,
+            unit_price=entry['unit_price'],
             quantity=entry['quantity'],
             line_total=entry['line_total'],
         )
+        for choice in entry.get('options', []):
+            OrderItemOption.objects.create(
+                order_item=order_item,
+                group_name=choice.group.name,
+                choice_name=choice.name,
+                extra_price=choice.extra_price,
+            )
 
     return order

@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
@@ -47,7 +47,7 @@ class CartViewsTests(TestCase):
 
         self.client.post(reverse('cart:cart_remove', args=[self.item.pk]))
         response = self.client.get(reverse('cart:cart_detail'))
-        self.assertContains(response, 'Your cart is empty')
+        self.assertContains(response, 'Seu carrinho')
 
     def test_unavailable_item_is_not_added(self):
         self.client.post(
@@ -56,4 +56,4 @@ class CartViewsTests(TestCase):
         )
 
         response = self.client.get(reverse('cart:cart_detail'))
-        self.assertContains(response, 'Your cart is empty')
+        self.assertContains(response, 'Seu carrinho')

@@ -1,57 +1,71 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Cart | OnMenu{% endblock %}
+{% block title %}Carrinho | OnMenu{% endblock %}
 
 {% block content %}
-  <section class="page-heading">
-    <h1>Your cart</h1>
-  </section>
+<div class="page-content">
+  <h1 class="page-title">🛒 Carrinho</h1>
 
   {% if cart_items %}
-    <section class="cart-layout">
+    <div class="cart-layout">
       <div class="cart-lines">
         {% for entry in cart_items %}
-          <article class="cart-line{% if not entry.item.is_available %} is-disabled{% endif %}">
-            <div>
-              <h2>{{ entry.item.name }}</h2>
-              <p>{{ currency_symbol }} {{ entry.unit_price|floatformat:2 }} each</p>
-              {% if not entry.item.is_available %}
-                <p class="availability">Unavailable</p>
+          <article class="cart-line{% if not entry.item.is_available %} unavailable{% endif %}">
+            <a class="cart-thumb" href="{% url 'menu:item_detail' entry.item.pk entry.item.slug %}">
+              {% if entry.item.image %}
+                <img src="{{ entry.item.image.url }}" alt="{{ entry.item.name }}">
+              {% elif entry.item.image_url %}
+                <img src="{{ entry.item.image_url }}" alt="{{ entry.item.name }}">
+              {% else %}
+                <img src="{% static 'img/placeholder-food.svg' %}" alt="">
               {% endif %}
+            </a>
+            <div class="cart-line-body">
+              <div class="cart-line-name">{{ entry.item.name }}</div>
+              {% for choice in entry.options %}
+                <div class="cart-line-opts">{{ choice.group.name }}: {{ choice.name }}{% if choice.extra_price %} (+{{ currency_symbol }} {{ choice.extra_price|floatformat:2 }}){% endif %}</div>
+              {% endfor %}
+              {% if not entry.item.is_available %}
+                <div class="unavail-badge">Indisponível — remova antes de finalizar</div>
+              {% endif %}
+              <div class="cart-line-actions">
+                <form class="qty-form" method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
+                  {% csrf_token %}
+                  <span class="qty-label">Qtd</span>
+                  <input class="qty-input" type="number" name="quantity" value="{{ entry.quantity }}" min="0">
+                  <button class="btn-secondary" type="submit">Atualizar</button>
+                </form>
+                <form method="post" action="{% url 'cart:cart_remove' entry.item.pk %}">
+                  {% csrf_token %}
+                  <button class="btn-secondary btn-danger" type="submit">Remover</button>
+                </form>
+                <span class="cart-line-price">{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</span>
+              </div>
             </div>
-            <div class="cart-actions">
-              <form method="post" action="{% url 'cart:cart_update' entry.item.pk %}" class="quantity-form">
-                {% csrf_token %}
-                <label for="quantity-{{ entry.item.pk }}">Quantity</label>
-                <input id="quantity-{{ entry.item.pk }}" type="number" name="quantity" value="{{ entry.quantity }}" min="0">
-                <button type="submit">Update</button>
-              </form>
-              <form method="post" action="{% url 'cart:cart_remove' entry.item.pk %}">
-                {% csrf_token %}
-                <button class="button-secondary" type="submit">Remove</button>
-              </form>
-            </div>
-            <strong>{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</strong>
           </article>
         {% endfor %}
       </div>
 
-      <aside class="summary-panel">
-        <h2>Summary</h2>
+      <aside class="cart-summary-panel">
+        <div class="summary-title">Resumo</div>
         <div class="summary-row">
           <span>Subtotal</span>
           <strong>{{ currency_symbol }} {{ subtotal|floatformat:2 }}</strong>
         </div>
         <div class="summary-actions">
-          <a class="button-secondary" href="{% url 'menu:menu_list' %}">Keep browsing</a>
-          <a class="button-primary" href="{% url 'orders:checkout' %}">Checkout</a>
+          <a class="btn-secondary" href="{% url 'menu:menu_list' %}">Continuar comprando</a>
+          <a class="btn-primary" href="{% url 'orders:checkout' %}">Finalizar pedido</a>
         </div>
       </aside>
-    </section>
+    </div>
+
   {% else %}
-    <section class="empty-state page-band">
-      <h1>Your cart is empty</h1>
-      <a class="button-primary" href="{% url 'menu:menu_list' %}">View menu</a>
-    </section>
+    <div class="empty-state">
+      <h2>Seu carrinho está vazio</h2>
+      <p>Adicione itens do cardápio para começar.</p>
+      <a class="btn-primary" href="{% url 'menu:menu_list' %}" style="display:inline-flex;width:auto;padding:12px 24px">Ver cardápio</a>
+    </div>
   {% endif %}
+</div>
 {% endblock %}

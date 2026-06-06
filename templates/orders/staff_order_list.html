@@ -1,36 +1,48 @@
 {% extends 'base.html' %}
 
-{% block title %}Staff Orders | OnMenu{% endblock %}
+{% block title %}Painel de pedidos | OnMenu{% endblock %}
 
 {% block content %}
-  <section class="page-heading split-heading">
-    <h1>Orders</h1>
-    <form method="get" class="filter-form">
-      <label for="status">Status</label>
-      <select id="status" name="status">
-        <option value="">All</option>
-        {% for value, label in status_choices %}
-          <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit">Filter</button>
-    </form>
-  </section>
+<div class="page-content">
+  <div class="staff-page">
 
-  <section class="staff-list">
-    {% for order in orders %}
-      <article class="order-card">
-        <div>
-          <h2><a href="{% url 'orders:staff_order_detail' order.order_number %}">{{ order.order_number }}</a></h2>
-          <p>{{ order.customer_name }} | {{ order.get_fulfillment_method_display }} | {{ order.created_at|date:'M j, Y H:i' }}</p>
+    <div class="split-heading">
+      <h1 class="page-h1">📋 Pedidos</h1>
+      <form class="filter-form" method="get">
+        <select class="filter-select" name="status">
+          <option value="">Todos os status</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn-secondary" type="submit" style="padding:8px 14px;font-size:.88rem">Filtrar</button>
+      </form>
+    </div>
+
+    <div class="order-cards">
+      {% for order in orders %}
+        <article class="order-card">
+          <div class="order-card-info">
+            <h2><a href="{% url 'orders:staff_order_detail' order.order_number %}">{{ order.order_number }}</a></h2>
+            <p class="order-card-meta">
+              {{ order.customer_name }} &nbsp;·&nbsp;
+              {{ order.get_fulfillment_method_display }} &nbsp;·&nbsp;
+              {{ order.created_at|date:"d/m H:i" }}
+            </p>
+          </div>
+          <div class="order-card-right">
+            <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
+            <span class="order-total">{{ currency_symbol }} {{ order.total|floatformat:2 }}</span>
+          </div>
+        </article>
+      {% empty %}
+        <div class="empty-state">
+          <h2>Nenhum pedido encontrado</h2>
+          <p>Tente outro filtro ou aguarde novos pedidos.</p>
         </div>
-        <div>
-          <span class="status-pill">{{ order.get_status_display }}</span>
-          <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong>
-        </div>
-      </article>
-    {% empty %}
-      <p class="empty-state">No orders match this filter.</p>
-    {% endfor %}
-  </section>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
 {% endblock %}

@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,27 +8,43 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body>
+
   <header class="site-header">
     <a class="brand" href="{% url 'menu:menu_list' %}">OnMenu</a>
-    <nav class="site-nav" aria-label="Primary">
-      <a href="{% url 'menu:menu_list' %}">Menu</a>
-      <a href="{% url 'cart:cart_detail' %}">Cart <span class="nav-count">{{ cart_item_count }}</span></a>
+    <div style="display:flex;align-items:center;gap:10px">
       {% if request.user.is_staff %}
-        <a href="{% url 'orders:staff_order_list' %}">Staff</a>
+        <a class="staff-link" href="{% url 'orders:staff_order_list' %}">Painel</a>
       {% endif %}
-    </nav>
+      <a class="cart-btn" href="{% url 'cart:cart_detail' %}">
+        🛒
+        <span class="cart-btn-count">{{ cart_item_count }}</span>
+        {% if cart_item_count > 0 %}
+          <span>{{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}</span>
+        {% else %}
+          <span>Carrinho</span>
+        {% endif %}
+      </a>
+    </div>
   </header>
 
   {% if messages %}
-    <div class="messages" aria-live="polite">
+    <div class="messages">
       {% for message in messages %}
         <div class="message message-{{ message.tags }}">{{ message }}</div>
       {% endfor %}
     </div>
   {% endif %}
 
-  <main>
-    {% block content %}{% endblock %}
-  </main>
+  {% block content %}{% endblock %}
+
+  {% if cart_item_count > 0 %}
+    <a class="float-cart" href="{% url 'cart:cart_detail' %}">
+      🛒 Ver carrinho
+      <span class="float-cart-count">{{ cart_item_count }} ite{% if cart_item_count == 1 %}m{% else %}ns{% endif %}</span>
+      · {{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}
+    </a>
+  {% endif %}
+
+  {% block extra_js %}{% endblock %}
 </body>
 </html>

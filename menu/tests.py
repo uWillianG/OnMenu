@@ -39,7 +39,7 @@ class MenuViewsTests(TestCase):
 
         self.assertContains(response, 'Burger')
         self.assertContains(response, 'Soup')
-        self.assertContains(response, 'Unavailable')
+        self.assertContains(response, 'Indispon')
 
     def test_item_detail_renders_item(self):
         response = self.client.get(
@@ -50,4 +50,4 @@ class MenuViewsTests(TestCase):
         )
 
         self.assertContains(response, 'A test burger.')
-        self.assertContains(response, 'Add to cart')
+        self.assertContains(response, 'Adicionar ao carrinho')
