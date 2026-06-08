@@ -20,13 +20,16 @@ def menu_list(request):
         categories = restaurant.categories.filter(is_active=True).prefetch_related(
             Prefetch(
                 'items',
-                queryset=MenuItem.objects.order_by('display_order', 'name'),
+                queryset=MenuItem.objects.order_by('display_order', 'name').prefetch_related(
+                    'option_groups__choices'
+                ),
             ),
         )
         featured_items = (
             MenuItem.objects
             .filter(category__restaurant=restaurant, is_featured=True, is_available=True)
             .select_related('category')
+            .prefetch_related('option_groups__choices')
             .order_by('display_order', 'name')
         )
         is_open = is_restaurant_open(restaurant)

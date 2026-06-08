@@ -73,33 +73,65 @@
 
         {# ── Destaques ── #}
         {% if featured_items %}
-          <section class="menu-section" id="destaques">
-            <h2 class="section-title featured">⭐ Destaques</h2>
-            <div class="product-list">
-              {% for item in featured_items %}
-                {% include 'menu/_product_card.html' with item=item %}
-              {% endfor %}
+          <details class="menu-section featured" id="destaques" open>
+            <summary>
+              ⭐ Destaques
+              <span class="section-item-count">{{ featured_items|length }} ite{% if featured_items|length == 1 %}m{% else %}ns{% endif %}</span>
+              <span class="section-chevron">▼</span>
+            </summary>
+            <div class="section-body">
+              <div class="product-list">
+                {% for item in featured_items %}
+                  {% include 'menu/_product_card.html' with item=item %}
+                {% endfor %}
+              </div>
             </div>
-          </section>
+          </details>
         {% endif %}
 
         {# ── Categories ── #}
         {% for category in categories %}
-          <section class="menu-section" id="{{ category.slug }}">
-            <h2 class="section-title">{{ category.name }}</h2>
-            <div class="product-list">
-              {% for item in category.items.all %}
-                {% include 'menu/_product_card.html' with item=item %}
-              {% empty %}
-                <p style="color:var(--muted);font-size:.9rem">Nenhum item nesta categoria ainda.</p>
-              {% endfor %}
+          <details class="menu-section" id="{{ category.slug }}">
+            <summary>
+              {{ category.name }}
+              <span class="section-item-count">{{ category.items.count }} ite{% if category.items.count == 1 %}m{% else %}ns{% endif %}</span>
+              <span class="section-chevron">▼</span>
+            </summary>
+            <div class="section-body">
+              <div class="product-list">
+                {% for item in category.items.all %}
+                  {% include 'menu/_product_card.html' with item=item %}
+                {% empty %}
+                  <p style="color:var(--muted);font-size:.9rem">Nenhum item nesta categoria ainda.</p>
+                {% endfor %}
+              </div>
             </div>
-          </section>
+          </details>
         {% empty %}
           <div class="empty-state">
             <h2>Cardápio em breve</h2>
             <p>Adicione categorias e itens no painel de administração.</p>
           </div>
+        {% endfor %}
+
+        {# ── Hidden item data for modal (one per item, avoids duplicates via category loop) ── #}
+        {% for category in categories %}
+          {% for item in category.items.all %}
+            <div id="modal-data-{{ item.pk }}" hidden
+                 data-name="{{ item.name }}"
+                 data-price="{{ item.price }}"
+                 data-desc="{{ item.description }}"
+                 data-image="{% if item.image %}{{ item.image.url }}{% elif item.image_url %}{{ item.image_url }}{% else %}{% static 'img/placeholder-food.svg' %}{% endif %}"
+                 data-url="{% url 'cart:cart_add' item.pk %}">
+              {% for group in item.option_groups.all %}
+                <span data-gid="{{ group.pk }}" data-gname="{{ group.name }}" data-req="{{ group.required|yesno:'true,false' }}">
+                  {% for c in group.choices.all %}
+                    <span data-cid="{{ c.pk }}" data-cname="{{ c.name }}" data-extra="{{ c.extra_price }}"></span>
+                  {% endfor %}
+                </span>
+              {% endfor %}
+            </div>
+          {% endfor %}
         {% endfor %}
 
       </div>{# /menu-content #}
@@ -140,6 +172,42 @@
     </div>{# /menu-layout #}
   </div>{# /page-wrapper #}
 
+  {# ── Product modal ── #}
+  <div id="item-modal" class="modal-overlay" hidden aria-modal="true" role="dialog">
+    <div class="modal-card">
+      <button class="modal-close" id="modal-close" type="button" aria-label="Fechar">✕</button>
+      <div class="modal-image-wrap">
+        <img id="modal-img" src="" alt="">
+      </div>
+      <div class="modal-body">
+        <div>
+          <h2 class="modal-name" id="modal-name"></h2>
+          <p class="modal-desc" id="modal-desc"></p>
+        </div>
+        <form id="modal-form" method="post">
+          {% csrf_token %}
+          <input type="hidden" name="quantity" id="modal-qty-input" value="1">
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <div id="modal-groups"></div>
+          <textarea id="modal-notes" class="modal-notes" name="item_notes" placeholder="Digite observações aqui (opcional)..."></textarea>
+          <div class="modal-footer">
+            <div class="modal-qty-row">
+              <button class="qty-btn" id="qty-minus" type="button" aria-label="Diminuir quantidade">−</button>
+              <span class="qty-val" id="qty-val">1</span>
+              <button class="qty-btn" id="qty-plus" type="button" aria-label="Aumentar quantidade">+</button>
+              <span class="qty-label">unidade(s)</span>
+            </div>
+            <div class="modal-total">
+              <span>Total</span>
+              <strong id="modal-total-val"></strong>
+            </div>
+            <button class="btn-primary modal-add-btn" type="submit">Adicionar ao carrinho</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
 {% else %}
   <div class="page-wrapper">
     <div class="empty-state">
@@ -152,6 +220,7 @@
 
 {% block extra_js %}
 <script>
+/* ── Category nav ─────────────────────────────────────────── */
 (function () {
   const links = document.querySelectorAll('.cat-link[data-section]');
   const sections = document.querySelectorAll('.menu-section[id]');
@@ -167,7 +236,7 @@
         }
       });
     },
-    { rootMargin: '-20% 0px -70% 0px' }
+    { rootMargin: '-10% 0px -80% 0px' }
   );
 
   sections.forEach((s) => observer.observe(s));
@@ -176,9 +245,159 @@
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const target = document.getElementById(link.dataset.section);
-      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!target) return;
+      if (target.tagName === 'DETAILS' && !target.open) target.open = true;
+      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
     });
   });
+})();
+
+/* ── Product modal ──────────────────────────────────────────── */
+(function () {
+  const CURRENCY = '{{ currency_symbol }}';
+
+  const modal       = document.getElementById('item-modal');
+  const modalClose  = document.getElementById('modal-close');
+  const modalImg    = document.getElementById('modal-img');
+  const modalName   = document.getElementById('modal-name');
+  const modalDesc   = document.getElementById('modal-desc');
+  const modalGroups = document.getElementById('modal-groups');
+  const modalForm   = document.getElementById('modal-form');
+  const modalQtyIn  = document.getElementById('modal-qty-input');
+  const qtyMinus    = document.getElementById('qty-minus');
+  const qtyPlus     = document.getElementById('qty-plus');
+  const qtyVal      = document.getElementById('qty-val');
+  const totalVal    = document.getElementById('modal-total-val');
+  const notesField  = document.getElementById('modal-notes');
+
+  let basePrice = 0;
+  let qty = 1;
+
+  function fmt(n) {
+    return CURRENCY + ' ' + n.toFixed(2).replace('.', ',');
+  }
+
+  function calcExtra() {
+    let e = 0;
+    modalGroups.querySelectorAll('input[type="radio"]:checked').forEach(r => { e += parseFloat(r.dataset.extra || 0); });
+    modalGroups.querySelectorAll('input[type="checkbox"]:checked').forEach(c => { e += parseFloat(c.dataset.extra || 0); });
+    return e;
+  }
+
+  function updateTotal() { totalVal.textContent = fmt((basePrice + calcExtra()) * qty); }
+
+  function setQty(n) {
+    qty = Math.max(1, n);
+    qtyVal.textContent = qty;
+    modalQtyIn.value = qty;
+    qtyMinus.disabled = qty <= 1;
+    updateTotal();
+  }
+
+  function buildGroup(groupEl) {
+    const choices   = groupEl.querySelectorAll('[data-cid]');
+    if (!choices.length) return null;
+    const required  = groupEl.dataset.req === 'true';
+    const inputType = required ? 'radio' : 'checkbox';
+    const wrap = document.createElement('div');
+    wrap.className = 'modal-group';
+    const titleRow = document.createElement('div');
+    titleRow.className = 'modal-group-title';
+    titleRow.textContent = groupEl.dataset.gname;
+    if (required) {
+      const b = document.createElement('span');
+      b.className = 'modal-required-badge';
+      b.textContent = 'Obrigatório';
+      titleRow.appendChild(b);
+    } else {
+      const s = document.createElement('span');
+      s.className = 'modal-group-subtitle';
+      s.textContent = 'Opcional';
+      titleRow.appendChild(s);
+    }
+    wrap.appendChild(titleRow);
+    choices.forEach((c, i) => {
+      const label = document.createElement('label');
+      label.className = 'modal-choice-item';
+      const input = document.createElement('input');
+      input.type = inputType;
+      input.name = 'option_group_' + groupEl.dataset.gid;
+      input.value = c.dataset.cid;
+      input.dataset.extra = c.dataset.extra;
+      if (inputType === 'radio' && i === 0) input.checked = true;
+      const lbl = document.createElement('span');
+      lbl.className = 'modal-choice-label';
+      lbl.textContent = c.dataset.cname;
+      const price = document.createElement('span');
+      price.className = 'modal-choice-price';
+      const extra = parseFloat(c.dataset.extra || 0);
+      price.textContent = extra > 0 ? '+' + fmt(extra) : 'Incluso';
+      const toggle = document.createElement('span');
+      toggle.className = 'modal-choice-toggle';
+      toggle.textContent = (inputType === 'radio' && i === 0) ? '\u2713' : '+';
+      label.append(input, lbl, price, toggle);
+      if (inputType === 'checkbox') {
+        label.addEventListener('click', (e) => {
+          e.preventDefault();
+          input.checked = !input.checked;
+          label.classList.toggle('selected', input.checked);
+          toggle.textContent = input.checked ? '\u2713' : '+';
+          updateTotal();
+        });
+      } else {
+        input.addEventListener('change', () => {
+          wrap.querySelectorAll('.modal-choice-item').forEach(l => {
+            const tog = l.querySelector('.modal-choice-toggle');
+            const inp = l.querySelector('input');
+            if (tog) tog.textContent = (inp && inp.checked) ? '\u2713' : '+';
+          });
+          updateTotal();
+        });
+      }
+      wrap.appendChild(label);
+    });
+    return wrap;
+  }
+
+  function openModal(itemId) {
+    const data = document.getElementById('modal-data-' + itemId);
+    if (!data) return;
+    basePrice = parseFloat(data.dataset.price);
+    setQty(1);
+    modalImg.src = data.dataset.image;
+    modalImg.alt = data.dataset.name;
+    modalName.textContent = data.dataset.name;
+    modalDesc.textContent = data.dataset.desc || '';
+    modalDesc.style.display = data.dataset.desc ? '' : 'none';
+    modalForm.action = data.dataset.url;
+    if (notesField) notesField.value = '';
+    modalGroups.innerHTML = '';
+    data.querySelectorAll('[data-gid]').forEach((g) => {
+      const el = buildGroup(g);
+      if (el) modalGroups.appendChild(el);
+    });
+    updateTotal();
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  document.querySelectorAll('[data-open-modal]').forEach((card) => {
+    card.addEventListener('click', () => openModal(card.dataset.openModal));
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(card.dataset.openModal); }
+    });
+  });
+
+  modalClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+  qtyMinus.addEventListener('click', () => setQty(qty - 1));
+  qtyPlus.addEventListener('click',  () => setQty(qty + 1));
 })();
 </script>
 {% endblock %}

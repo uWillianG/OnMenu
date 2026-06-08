@@ -154,37 +154,88 @@ class Command(BaseCommand):
             )
             item_map[slug] = obj
 
-        # ── Option groups for Classic Smash ──
-        burger = item_map['classic-smash']
-        group, _ = ItemOptionGroup.objects.update_or_create(
-            menu_item=burger,
-            name='Ponto do hambúrguer',
-            defaults={'required': True, 'display_order': 10},
-        )
-        for i, (name, extra) in enumerate([
-            ('Mal passado', Decimal('0.00')),
-            ('Ao ponto', Decimal('0.00')),
-            ('Bem passado', Decimal('0.00')),
-        ], start=1):
-            ItemOptionChoice.objects.update_or_create(
-                group=group, name=name,
-                defaults={'extra_price': extra, 'display_order': i * 10},
-            )
+        # ── Complementos (optional multi-select) for all burgers & lanches ──
+        complementos_choices = [
+            ('Bacon crocante',        Decimal('5.00')),
+            ('Queijo cheddar',        Decimal('3.00')),
+            ('Queijo mussarela',      Decimal('3.00')),
+            ('Queijo gorgonzola',     Decimal('4.00')),
+            ('Ovo frito',             Decimal('3.00')),
+            ('Alface',                Decimal('1.00')),
+            ('Tomate',                Decimal('1.00')),
+            ('Cebola caramelizada',   Decimal('3.00')),
+            ('Cebola crua',           Decimal('1.00')),
+            ('Picles',                Decimal('1.00')),
+            ('Rúcula',                Decimal('1.00')),
+            ('Pimenta biquinho',      Decimal('1.00')),
+            ('Maionese da casa',      Decimal('1.00')),
+            ('Molho barbecue',        Decimal('1.00')),
+            ('Geleia de abacaxi',     Decimal('2.00')),
+            ('Hambúrguer adicional',  Decimal('9.00')),
+        ]
 
-        group2, _ = ItemOptionGroup.objects.update_or_create(
-            menu_item=burger,
-            name='Pão',
-            defaults={'required': False, 'display_order': 20},
-        )
-        for i, (name, extra) in enumerate([
-            ('Brioche (padrão)', Decimal('0.00')),
-            ('Integral', Decimal('0.00')),
-            ('Sem glúten', Decimal('4.00')),
-        ], start=1):
-            ItemOptionChoice.objects.update_or_create(
-                group=group2, name=name,
-                defaults={'extra_price': extra, 'display_order': i * 10},
+        burger_lanche_slugs = [
+            'classic-smash', 'duplo-bacon', 'veggie-burger',
+            'frango-crispy', 'smash-trufado',
+            'x-salada', 'x-burguer', 'x-egg', 'x-bacon',
+        ]
+
+        for slug in burger_lanche_slugs:
+            item = item_map.get(slug)
+            if not item:
+                continue
+            comp_group, _ = ItemOptionGroup.objects.update_or_create(
+                menu_item=item,
+                name='Complementos',
+                defaults={'required': False, 'display_order': 100},
             )
+            for i, (name, extra) in enumerate(complementos_choices, start=1):
+                ItemOptionChoice.objects.update_or_create(
+                    group=comp_group, name=name,
+                    defaults={'extra_price': extra, 'display_order': i * 10},
+                )
+
+        # ── Ponto do hambúrguer (required) for beef burgers ──
+        ponto_slugs = ['classic-smash', 'duplo-bacon', 'smash-trufado',
+                       'x-salada', 'x-burguer', 'x-egg', 'x-bacon']
+        for slug in ponto_slugs:
+            item = item_map.get(slug)
+            if not item:
+                continue
+            ponto_group, _ = ItemOptionGroup.objects.update_or_create(
+                menu_item=item,
+                name='Ponto do hambúrguer',
+                defaults={'required': True, 'display_order': 10},
+            )
+            for i, (name, extra) in enumerate([
+                ('Mal passado',  Decimal('0.00')),
+                ('Ao ponto',     Decimal('0.00')),
+                ('Bem passado',  Decimal('0.00')),
+            ], start=1):
+                ItemOptionChoice.objects.update_or_create(
+                    group=ponto_group, name=name,
+                    defaults={'extra_price': extra, 'display_order': i * 10},
+                )
+
+        # ── Pão (optional single-select) for all burgers & lanches ──
+        for slug in burger_lanche_slugs:
+            item = item_map.get(slug)
+            if not item:
+                continue
+            pao_group, _ = ItemOptionGroup.objects.update_or_create(
+                menu_item=item,
+                name='Pão',
+                defaults={'required': False, 'display_order': 20},
+            )
+            for i, (name, extra) in enumerate([
+                ('Brioche (padrão)', Decimal('0.00')),
+                ('Integral',         Decimal('0.00')),
+                ('Sem glúten',       Decimal('4.00')),
+            ], start=1):
+                ItemOptionChoice.objects.update_or_create(
+                    group=pao_group, name=name,
+                    defaults={'extra_price': extra, 'display_order': i * 10},
+                )
 
         self.stdout.write(self.style.SUCCESS(
             f'Dados de exemplo criados para "{restaurant.name}".'

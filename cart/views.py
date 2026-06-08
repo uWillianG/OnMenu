@@ -31,13 +31,20 @@ def cart_add(request, item_id):
         messages.warning(request, f'{item.name} is currently unavailable.')
         return redirect(_next_url(request))
 
+    # Parse option groups — supports both single-select (radio) and multi-select (checkbox)
     options = {}
-    for key, value in request.POST.items():
-        if key.startswith('option_group_') and value:
-            group_id = key[len('option_group_'):]
-            options[group_id] = value
+    group_keys = {key for key in request.POST if key.startswith('option_group_')}
+    for key in group_keys:
+        group_id = key[len('option_group_'):]
+        values = [v for v in request.POST.getlist(key) if v]
+        if len(values) == 1:
+            options[group_id] = values[0]
+        elif len(values) > 1:
+            options[group_id] = values
 
-    cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options)
+    notes = request.POST.get('item_notes', '').strip()
+
+    cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options, notes=notes)
     messages.success(request, f'{item.name} was added to your cart.')
     return redirect(_next_url(request))
 

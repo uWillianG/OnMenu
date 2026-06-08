@@ -173,6 +173,7 @@ def _create_order_from_cart(form, cart, cart_items, restaurant):
             unit_price=entry['unit_price'],
             quantity=entry['quantity'],
             line_total=entry['line_total'],
+            notes=entry.get('notes', ''),
         )
         for choice in entry.get('options', []):
             OrderItemOption.objects.create(

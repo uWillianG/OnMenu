@@ -1,37 +1,27 @@
 {% load static %}
-<article class="product-card{% if not item.is_available %} unavailable{% endif %}">
+<article class="product-card{% if not item.is_available %} unavailable{% endif %}"
+         {% if item.is_available %}data-open-modal="{{ item.pk }}" tabindex="0" role="button" aria-label="Ver {{ item.name }}"{% endif %}>
   <div class="product-info">
-    <div class="product-name">
-      <a href="{% url 'menu:item_detail' item.pk item.slug %}">{{ item.name }}</a>
-    </div>
+    <div class="product-name">{{ item.name }}</div>
     {% if item.description %}
       <div class="product-desc">{{ item.description }}</div>
     {% endif %}
     <div class="product-footer">
       <span class="product-price">{{ currency_symbol }} {{ item.price|floatformat:2 }}</span>
       {% if item.is_available %}
-        {% if item.option_groups.exists %}
-          <a class="btn-customize" href="{% url 'menu:item_detail' item.pk item.slug %}">Personalizar</a>
-        {% else %}
-          <form class="add-form" method="post" action="{% url 'cart:cart_add' item.pk %}">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ request.path }}">
-            <input class="qty-input" type="number" name="quantity" value="1" min="1" aria-label="Quantidade">
-            <button class="btn-add" type="submit">+ Adicionar</button>
-          </form>
-        {% endif %}
+        <span class="card-add-icon" aria-hidden="true">+</span>
       {% else %}
         <span class="unavail-badge">Indisponível</span>
       {% endif %}
     </div>
   </div>
-  <a class="product-thumb" href="{% url 'menu:item_detail' item.pk item.slug %}" tabindex="-1" aria-hidden="true">
+  <div class="product-thumb" aria-hidden="true">
     {% if item.image %}
-      <img src="{{ item.image.url }}" alt="{{ item.name }}">
+      <img src="{{ item.image.url }}" alt="">
     {% elif item.image_url %}
-      <img src="{{ item.image_url }}" alt="{{ item.name }}">
+      <img src="{{ item.image_url }}" alt="">
     {% else %}
       <img src="{% static 'img/placeholder-food.svg' %}" alt="">
     {% endif %}
-  </a>
+  </div>
 </article>

@@ -110,6 +110,7 @@ class OrderItem(models.Model):
     unit_price = models.DecimalField(max_digits=8, decimal_places=2)
     quantity = models.PositiveIntegerField()
     line_total = models.DecimalField(max_digits=10, decimal_places=2)
+    notes = models.CharField(max_length=300, blank=True, default='')
 
     class Meta:
         ordering = ['id']
