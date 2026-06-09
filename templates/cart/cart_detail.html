@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="page-content">
-  <h1 class="page-title">🛒 Carrinho</h1>
+  <h1 class="page-title">Carrinho</h1>
 
   {% if cart_items %}
     <div class="cart-layout">
@@ -21,25 +21,38 @@
                 <img src="{% static 'img/placeholder-food.svg' %}" alt="">
               {% endif %}
             </a>
+
             <div class="cart-line-body">
-              <div class="cart-line-name">{{ entry.item.name }}</div>
+              <div class="cart-line-head">
+                <div class="cart-line-name">{{ entry.item.name }}</div>
+                <form method="post" action="{% url 'cart:cart_remove' entry.item.pk %}">
+                  {% csrf_token %}
+                  <button class="cart-line-remove" type="submit" aria-label="Remover {{ entry.item.name }}">✕</button>
+                </form>
+              </div>
+
               {% for choice in entry.options %}
                 <div class="cart-line-opts">{{ choice.group.name }}: {{ choice.name }}{% if choice.extra_price %} (+{{ currency_symbol }} {{ choice.extra_price|floatformat:2 }}){% endif %}</div>
               {% endfor %}
+
               {% if not entry.item.is_available %}
-                <div class="unavail-badge">Indisponível — remova antes de finalizar</div>
+                <div class="cart-line-warn">Indisponível — remova antes de finalizar</div>
               {% endif %}
-              <div class="cart-line-actions">
-                <form class="qty-form" method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
-                  {% csrf_token %}
-                  <span class="qty-label">Qtd</span>
-                  <input class="qty-input" type="number" name="quantity" value="{{ entry.quantity }}" min="0">
-                  <button class="btn-secondary" type="submit">Atualizar</button>
-                </form>
-                <form method="post" action="{% url 'cart:cart_remove' entry.item.pk %}">
-                  {% csrf_token %}
-                  <button class="btn-secondary btn-danger" type="submit">Remover</button>
-                </form>
+
+              <div class="cart-line-foot">
+                <div class="qty-stepper" role="group" aria-label="Quantidade">
+                  <form method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="quantity" value="{{ entry.quantity|add:'-1' }}">
+                    <button class="step-btn" type="submit" aria-label="Diminuir">−</button>
+                  </form>
+                  <span class="qty-num" aria-live="polite">{{ entry.quantity }}</span>
+                  <form method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="quantity" value="{{ entry.quantity|add:'1' }}">
+                    <button class="step-btn" type="submit" aria-label="Aumentar">+</button>
+                  </form>
+                </div>
                 <span class="cart-line-price">{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</span>
               </div>
             </div>
@@ -48,23 +61,25 @@
       </div>
 
       <aside class="cart-summary-panel">
-        <div class="summary-title">Resumo</div>
+        <div class="summary-title">Resumo do pedido</div>
         <div class="summary-row">
           <span>Subtotal</span>
           <strong>{{ currency_symbol }} {{ subtotal|floatformat:2 }}</strong>
         </div>
+        <p class="summary-note">Taxa de entrega calculada na finalização.</p>
         <div class="summary-actions">
-          <a class="btn-secondary" href="{% url 'menu:menu_list' %}">Continuar comprando</a>
           <a class="btn-primary" href="{% url 'orders:checkout' %}">Finalizar pedido</a>
+          <a class="btn-secondary" href="{% url 'menu:menu_list' %}">Continuar comprando</a>
         </div>
       </aside>
     </div>
 
   {% else %}
     <div class="empty-state">
+      <div class="empty-state-icon" aria-hidden="true">🛒</div>
       <h2>Seu carrinho está vazio</h2>
       <p>Adicione itens do cardápio para começar.</p>
-      <a class="btn-primary" href="{% url 'menu:menu_list' %}" style="display:inline-flex;width:auto;padding:12px 24px">Ver cardápio</a>
+      <a class="btn-primary" href="{% url 'menu:menu_list' %}" style="display:inline-flex;width:auto;padding:13px 26px">Ver cardápio</a>
     </div>
   {% endif %}
 </div>

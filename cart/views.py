@@ -28,7 +28,7 @@ def cart_add(request, item_id):
     item = get_object_or_404(MenuItem, pk=item_id)
 
     if not item.is_available:
-        messages.warning(request, f'{item.name} is currently unavailable.')
+        messages.warning(request, f'{item.name} está indisponível no momento.')
         return redirect(_next_url(request))
 
     # Parse option groups — supports both single-select (radio) and multi-select (checkbox)
@@ -45,7 +45,7 @@ def cart_add(request, item_id):
     notes = request.POST.get('item_notes', '').strip()
 
     cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options, notes=notes)
-    messages.success(request, f'{item.name} was added to your cart.')
+    messages.success(request, f'{item.name} foi adicionado ao carrinho.')
     return redirect(_next_url(request))
 
 
@@ -57,10 +57,10 @@ def cart_update(request, item_id):
 
     if quantity <= 0:
         cart.remove(item)
-        messages.info(request, f'{item.name} was removed from your cart.')
+        messages.info(request, f'{item.name} foi removido do carrinho.')
     else:
         cart.add(item, quantity=quantity, override_quantity=True)
-        messages.success(request, f'{item.name} quantity updated.')
+        messages.success(request, f'Quantidade de {item.name} atualizada.')
 
     return redirect('cart:cart_detail')
 
@@ -70,7 +70,7 @@ def cart_remove(request, item_id):
     cart = Cart(request)
     item = get_object_or_404(MenuItem, pk=item_id)
     cart.remove(item)
-    messages.info(request, f'{item.name} was removed from your cart.')
+    messages.info(request, f'{item.name} foi removido do carrinho.')
     return redirect('cart:cart_detail')
 
 

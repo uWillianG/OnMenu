@@ -15,12 +15,12 @@ def generate_order_number():
 
 class Order(models.Model):
     class FulfillmentMethod(models.TextChoices):
-        DELIVERY = 'delivery', 'Delivery'
-        PICKUP = 'pickup', 'Pickup'
+        DELIVERY = 'delivery', 'Entrega'
+        PICKUP = 'pickup', 'Retirada'
 
     class PaymentMethod(models.TextChoices):
-        CASH = 'cash', 'Cash'
-        CARD_ON_DELIVERY = 'card_on_delivery', 'Card on delivery'
+        CASH = 'cash', 'Dinheiro'
+        CARD_ON_DELIVERY = 'card_on_delivery', 'Cartão na entrega'
         PIX = 'pix', 'PIX'
 
     class Status(models.TextChoices):
@@ -48,7 +48,15 @@ class Order(models.Model):
         choices=FulfillmentMethod.choices,
         default=FulfillmentMethod.DELIVERY,
     )
+    # Composed full address (kept for display, WhatsApp and admin search).
+    # Auto-built from the structured fields below on save() for delivery orders.
     address = models.TextField(blank=True)
+    address_cep = models.CharField('CEP', max_length=9, blank=True)
+    address_street = models.CharField('Rua', max_length=200, blank=True)
+    address_number = models.CharField('Número', max_length=20, blank=True)
+    address_complement = models.CharField('Complemento', max_length=100, blank=True)
+    address_neighborhood = models.CharField('Bairro', max_length=100, blank=True)
+    address_city = models.CharField('Cidade', max_length=100, blank=True)
     notes = models.TextField(blank=True)
     payment_method = models.CharField(
         max_length=30,
@@ -81,9 +89,28 @@ class Order(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    def _compose_address(self):
+        line1 = ', '.join(p for p in [self.address_street, self.address_number] if p)
+        if self.address_complement:
+            line1 = f'{line1} ({self.address_complement})' if line1 else self.address_complement
+        line2 = ' - '.join(p for p in [self.address_neighborhood, self.address_city] if p)
+        line3 = f'CEP {self.address_cep}' if self.address_cep else ''
+        return '\n'.join(line for line in [line1, line2, line3] if line)
+
+    @property
+    def has_structured_address(self):
+        return any([
+            self.address_street, self.address_number, self.address_neighborhood,
+            self.address_city, self.address_cep, self.address_complement,
+        ])
+
     def save(self, *args, **kwargs):
         if not self.order_number:
             self.order_number = generate_order_number()
+        # Rebuild the display address from parts (skip legacy orders with no
+        # structured fields so their existing address text isn't wiped).
+        if self.fulfillment_method == self.FulfillmentMethod.DELIVERY and self.has_structured_address:
+            self.address = self._compose_address()
         self.total = (self.subtotal or Decimal('0.00')) + (
             self.delivery_fee or Decimal('0.00')
         )

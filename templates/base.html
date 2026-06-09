@@ -4,8 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
   <title>{% block title %}OnMenu{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=6">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=13">
 </head>
 <body>
 
@@ -37,11 +41,11 @@
 
   {% block content %}{% endblock %}
 
-  {% if cart_item_count > 0 %}
+  {% if cart_item_count > 0 and request.resolver_match.view_name != 'cart:cart_detail' and request.resolver_match.view_name != 'orders:checkout' %}
     <a class="float-cart" href="{% url 'cart:cart_detail' %}">
-      🛒 Ver carrinho
+      <span class="float-cart-label">🛒 Ver carrinho</span>
       <span class="float-cart-count">{{ cart_item_count }} ite{% if cart_item_count == 1 %}m{% else %}ns{% endif %}</span>
-      · {{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}
+      <span class="float-cart-total">{{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}</span>
     </a>
   {% endif %}
 

@@ -21,14 +21,14 @@ def checkout(request):
     cart_items = cart.items
 
     if not cart_items:
-        messages.warning(request, 'Your cart is empty.')
+        messages.warning(request, 'Seu carrinho está vazio.')
         return redirect('cart:cart_detail')
 
     unavailable_items = [entry['item'].name for entry in cart_items if not entry['item'].is_available]
     if unavailable_items:
         messages.warning(
             request,
-            'Remove unavailable items before checkout: ' + ', '.join(unavailable_items),
+            'Remova os itens indisponíveis antes de finalizar: ' + ', '.join(unavailable_items),
         )
         return redirect('cart:cart_detail')
 
@@ -50,7 +50,7 @@ def checkout(request):
                 restaurant=restaurant,
             )
             cart.clear()
-            messages.success(request, f'Order {order.order_number} received.')
+            messages.success(request, f'Pedido {order.order_number} recebido.')
             return redirect('orders:confirmation', order_number=order.order_number)
     else:
         form = CheckoutForm(initial={'fulfillment_method': Order.FulfillmentMethod.DELIVERY})

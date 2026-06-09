@@ -44,7 +44,12 @@ class OrderViewsTests(TestCase):
                 'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
                 'customer_name': 'Ada Lovelace',
                 'phone': '555-0100',
-                'address': '1 Code Street',
+                'address_cep': '01001-000',
+                'address_street': 'Code Street',
+                'address_number': '1',
+                'address_complement': 'Apt 2',
+                'address_neighborhood': 'Centro',
+                'address_city': 'São Paulo',
                 'notes': 'No onions',
                 'payment_method': Order.PaymentMethod.PIX,
             },
@@ -60,6 +65,28 @@ class OrderViewsTests(TestCase):
         self.assertEqual(order.total, Decimal('45.00'))
         self.assertTrue(order.order_number.startswith('OM-'))
         self.assertEqual(order.items.count(), 1)
+        # structured fields persist and the display address is composed from them
+        self.assertEqual(order.address_street, 'Code Street')
+        self.assertEqual(order.address_city, 'São Paulo')
+        self.assertIn('Code Street, 1', order.address)
+        self.assertIn('Centro', order.address)
+
+    def test_delivery_checkout_requires_structured_address(self):
+        self._add_item_to_cart(quantity=1)
+
+        response = self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
+                'customer_name': 'Ada Lovelace',
+                'phone': '555-0100',
+                'payment_method': Order.PaymentMethod.PIX,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Order.objects.exists())
+        self.assertContains(response, 'Informe a rua.')
 
     def test_pickup_checkout_has_no_delivery_fee(self):
         self._add_item_to_cart(quantity=1)

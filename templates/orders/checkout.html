@@ -8,24 +8,26 @@
 
   <div class="checkout-layout">
 
-    <form method="post" class="checkout-form-panel">
+    <form method="post" class="checkout-form">
       {% csrf_token %}
 
-      <div class="form-section">
-        <div class="form-section-title">🛵 Tipo de entrega</div>
-        <div class="radio-group">
+      <section class="checkout-card">
+        <div class="checkout-card-head"><span class="checkout-card-icon">🛵</span>Tipo de entrega</div>
+        <div class="select-tiles">
           {% for choice in form.fulfillment_method %}
-            <label class="radio-option">
+            <label class="select-tile">
               {{ choice.tag }}
-              <span class="radio-option-text">{{ choice.choice_label }}</span>
+              <span class="select-tile-emoji">{% if choice.data.value == 'pickup' %}🏪{% else %}🛵{% endif %}</span>
+              <span class="select-tile-text">{{ choice.choice_label }}</span>
+              <span class="select-tile-check" aria-hidden="true"></span>
             </label>
           {% endfor %}
         </div>
         {% if form.fulfillment_method.errors %}<ul class="errorlist">{% for e in form.fulfillment_method.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-      </div>
+      </section>
 
-      <div class="form-section">
-        <div class="form-section-title">👤 Seus dados</div>
+      <section class="checkout-card">
+        <div class="checkout-card-head"><span class="checkout-card-icon">👤</span>Seus dados</div>
 
         <div class="form-field">
           <label class="form-label" for="{{ form.customer_name.id_for_label }}">Nome completo</label>
@@ -40,61 +42,104 @@
             value="{{ form.phone.value|default:'' }}" autocomplete="tel" placeholder="Ex: (11) 99999-0000">
           {% if form.phone.errors %}<ul class="errorlist">{% for e in form.phone.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
-      </div>
+      </section>
 
-      <div class="form-section" id="address-section">
-        <div class="form-section-title">📍 Endereço de entrega</div>
-        <div class="form-field">
-          <label class="form-label" for="{{ form.address.id_for_label }}">Endereço completo</label>
-          <textarea class="form-textarea" id="{{ form.address.id_for_label }}" name="address"
-            autocomplete="street-address" placeholder="Rua, número, bairro, complemento">{{ form.address.value|default:'' }}</textarea>
-          {% if form.address.errors %}<ul class="errorlist">{% for e in form.address.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      <section class="checkout-card" id="address-section">
+        <div class="checkout-card-head"><span class="checkout-card-icon">📍</span>Endereço de entrega</div>
+        <div class="address-grid">
+
+          <div class="form-field">
+            <label class="form-label" for="{{ form.address_cep.id_for_label }}">CEP</label>
+            {{ form.address_cep }}
+            {% if form.address_cep.errors %}<ul class="errorlist">{% for e in form.address_cep.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="{{ form.address_city.id_for_label }}">Cidade</label>
+            {{ form.address_city }}
+            {% if form.address_city.errors %}<ul class="errorlist">{% for e in form.address_city.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label" for="{{ form.address_street.id_for_label }}">Rua / Avenida</label>
+            {{ form.address_street }}
+            {% if form.address_street.errors %}<ul class="errorlist">{% for e in form.address_street.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="{{ form.address_number.id_for_label }}">Número</label>
+            {{ form.address_number }}
+            {% if form.address_number.errors %}<ul class="errorlist">{% for e in form.address_number.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="{{ form.address_neighborhood.id_for_label }}">Bairro</label>
+            {{ form.address_neighborhood }}
+            {% if form.address_neighborhood.errors %}<ul class="errorlist">{% for e in form.address_neighborhood.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+
+          <div class="form-field span-2">
+            <label class="form-label" for="{{ form.address_complement.id_for_label }}">Complemento <span class="form-label-opt">(opcional)</span></label>
+            {{ form.address_complement }}
+          </div>
+
         </div>
-      </div>
+      </section>
 
-      <div class="form-section">
-        <div class="form-section-title">📝 Observações</div>
+      <section class="checkout-card">
+        <div class="checkout-card-head"><span class="checkout-card-icon">📝</span>Observações</div>
         <div class="form-field">
           <textarea class="form-textarea" id="{{ form.notes.id_for_label }}" name="notes"
             placeholder="Alguma observação? Ex: sem cebola, troco para R$ 50…">{{ form.notes.value|default:'' }}</textarea>
         </div>
-      </div>
+      </section>
 
-      <div class="form-section">
-        <div class="form-section-title">💳 Forma de pagamento</div>
-        <div class="radio-group">
+      <section class="checkout-card">
+        <div class="checkout-card-head"><span class="checkout-card-icon">💳</span>Forma de pagamento</div>
+        <div class="select-tiles">
           {% for choice in form.payment_method %}
-            <label class="radio-option">
+            <label class="select-tile">
               {{ choice.tag }}
-              <span class="radio-option-text">{{ choice.choice_label }}</span>
+              <span class="select-tile-emoji">{% if choice.data.value == 'pix' %}⚡{% elif choice.data.value == 'cash' %}💵{% else %}💳{% endif %}</span>
+              <span class="select-tile-text">{{ choice.choice_label }}</span>
+              <span class="select-tile-check" aria-hidden="true"></span>
             </label>
           {% endfor %}
         </div>
         {% if form.payment_method.errors %}<ul class="errorlist">{% for e in form.payment_method.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-      </div>
+      </section>
 
-      <button class="btn-primary" type="submit">Confirmar pedido</button>
+      <button class="btn-primary checkout-submit" type="submit">
+        Confirmar pedido · {{ currency_symbol }} <span id="cta-total">{{ estimated_total|floatformat:2 }}</span>
+      </button>
     </form>
 
-    <aside class="cart-summary-panel">
-      <div class="summary-title">Resumo do pedido</div>
-      {% for entry in cart_items %}
-        <div class="summary-row">
-          <span>{{ entry.quantity }}× {{ entry.item.name }}</span>
-          <strong>{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</strong>
+    <aside class="checkout-summary"
+           data-subtotal="{{ subtotal|floatformat:2 }}"
+           data-delivery="{{ delivery_fee|floatformat:2 }}">
+      <div class="cart-summary-panel">
+        <div class="summary-title">Resumo do pedido</div>
+        <div class="summary-items">
+          {% for entry in cart_items %}
+            <div class="summary-line">
+              <span class="summary-line-qty">{{ entry.quantity }}×</span>
+              <span class="summary-line-name">{{ entry.item.name }}</span>
+              <span class="summary-line-price">{{ currency_symbol }} {{ entry.line_total|floatformat:2 }}</span>
+            </div>
+          {% endfor %}
         </div>
-      {% endfor %}
-      <div class="summary-row">
-        <span>Subtotal</span>
-        <strong>{{ currency_symbol }} {{ subtotal|floatformat:2 }}</strong>
-      </div>
-      <div class="summary-row">
-        <span>Taxa de entrega</span>
-        <strong>{{ currency_symbol }} {{ delivery_fee|floatformat:2 }}</strong>
-      </div>
-      <div class="summary-row grand">
-        <span>Total</span>
-        <strong>{{ currency_symbol }} {{ estimated_total|floatformat:2 }}</strong>
+        <div class="summary-row">
+          <span>Subtotal</span>
+          <strong>{{ currency_symbol }} {{ subtotal|floatformat:2 }}</strong>
+        </div>
+        <div class="summary-row" id="summary-delivery-row">
+          <span>Taxa de entrega</span>
+          <strong>{{ currency_symbol }} {{ delivery_fee|floatformat:2 }}</strong>
+        </div>
+        <div class="summary-row grand">
+          <span>Total</span>
+          <strong>{{ currency_symbol }} <span id="summary-total">{{ estimated_total|floatformat:2 }}</span></strong>
+        </div>
       </div>
     </aside>
 
@@ -105,12 +150,28 @@
 {% block extra_js %}
 <script>
 (function () {
-  const section = document.getElementById('address-section');
-  const radios  = document.querySelectorAll('input[name="fulfillment_method"]');
+  const section   = document.getElementById('address-section');
+  const radios    = document.querySelectorAll('input[name="fulfillment_method"]');
+  const summary   = document.querySelector('.checkout-summary');
+  const delRow    = document.getElementById('summary-delivery-row');
+  const totalEl   = document.getElementById('summary-total');
+  const ctaTotal  = document.getElementById('cta-total');
+
+  const subtotal  = parseFloat((summary?.dataset.subtotal || '0').replace(',', '.'));
+  const delivery  = parseFloat((summary?.dataset.delivery || '0').replace(',', '.'));
+
+  function fmt(n) { return n.toFixed(2); }
+
   function update() {
     const val = document.querySelector('input[name="fulfillment_method"]:checked')?.value;
-    if (section) section.style.display = val === 'pickup' ? 'none' : '';
+    const isPickup = val === 'pickup';
+    if (section) section.style.display = isPickup ? 'none' : '';
+    if (delRow)  delRow.style.display  = isPickup ? 'none' : '';
+    const total = subtotal + (isPickup ? 0 : delivery);
+    if (totalEl)  totalEl.textContent  = fmt(total);
+    if (ctaTotal) ctaTotal.textContent = fmt(total);
   }
+
   radios.forEach((r) => r.addEventListener('change', update));
   update();
 })();

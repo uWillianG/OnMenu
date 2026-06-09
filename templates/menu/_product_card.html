@@ -1,6 +1,18 @@
 {% load static %}
 <article class="product-card{% if not item.is_available %} unavailable{% endif %}"
          {% if item.is_available %}data-open-modal="{{ item.pk }}" tabindex="0" role="button" aria-label="Ver {{ item.name }}"{% endif %}>
+  <div class="product-thumb" aria-hidden="true">
+    {% if item.image %}
+      <img src="{{ item.image.url }}" alt="" loading="lazy">
+    {% elif item.image_url %}
+      <img src="{{ item.image_url }}" alt="" loading="lazy">
+    {% else %}
+      <img src="{% static 'img/placeholder-food.svg' %}" alt="" loading="lazy">
+    {% endif %}
+    {% if not item.is_available %}
+      <span class="product-soldout">Indisponível</span>
+    {% endif %}
+  </div>
   <div class="product-info">
     <div class="product-name">{{ item.name }}</div>
     {% if item.description %}
@@ -10,18 +22,7 @@
       <span class="product-price">{{ currency_symbol }} {{ item.price|floatformat:2 }}</span>
       {% if item.is_available %}
         <span class="card-add-icon" aria-hidden="true">+</span>
-      {% else %}
-        <span class="unavail-badge">Indisponível</span>
       {% endif %}
     </div>
-  </div>
-  <div class="product-thumb" aria-hidden="true">
-    {% if item.image %}
-      <img src="{{ item.image.url }}" alt="">
-    {% elif item.image_url %}
-      <img src="{{ item.image_url }}" alt="">
-    {% else %}
-      <img src="{% static 'img/placeholder-food.svg' %}" alt="">
-    {% endif %}
   </div>
 </article>
