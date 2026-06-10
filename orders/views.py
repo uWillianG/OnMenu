@@ -19,7 +19,7 @@ from cart.cart import Cart
 from menu.selectors import get_current_restaurant, is_restaurant_open
 
 from .forms import CheckoutForm, OrderStatusForm
-from .models import City, Order, OrderItem, OrderItemOption, PixPayment
+from .models import CardPayment, City, Order, OrderItem, OrderItemOption, PixPayment
 from .services import mercadopago as mp_service
 from .services import pedidos as pedidos_service
 
@@ -68,6 +68,18 @@ def checkout(request):
                     logger.exception('Falha ao criar cobrança Pix')
                     return JsonResponse({'ok': False, 'error': str(exc)}, status=502)
                 return JsonResponse(_pix_payload(pix, order))
+            # Cartão de crédito: o pedido é criado aqui; o pagamento ocorre depois
+            # que o Brick tokeniza o cartão e o frontend chama orders:card_pay.
+            if order.payment_method == Order.PaymentMethod.CREDIT_CARD and is_ajax:
+                return JsonResponse({
+                    'ok': True,
+                    'mode': 'card',
+                    'order_number': order.order_number,
+                    'amount': str(order.total),
+                    'public_key': settings.MERCADOPAGO_PUBLIC_KEY,
+                    'card_pay_url': reverse('orders:card_pay', args=[order.order_number]),
+                    'confirmation_url': reverse('orders:confirmation', args=[order.order_number]),
+                })
             messages.success(request, f'Pedido {order.order_number} recebido.')
             return redirect('orders:confirmation', order_number=order.order_number)
         if is_ajax:
@@ -88,6 +100,7 @@ def checkout(request):
             'estimated_total': cart.subtotal,
             'delivery_areas': _delivery_areas_data(),
             'restaurant': restaurant,
+            'mercadopago_public_key': settings.MERCADOPAGO_PUBLIC_KEY,
         },
     )
 
@@ -234,7 +247,19 @@ def pix_recreate(request, order_number):
 @csrf_exempt
 @require_http_methods(['POST'])
 def webhook_pix(request):
-    """Webhook do Mercado Pago: confirma/cancela o pedido conforme o pagamento."""
+    """Webhook do Mercado Pago para cobranças Pix."""
+    return _handle_payment_webhook(request)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def webhook_card(request):
+    """Webhook do Mercado Pago para pagamentos com cartão."""
+    return _handle_payment_webhook(request)
+
+
+def _handle_payment_webhook(request):
+    """Confirma/cancela o pedido conforme o pagamento. Responde 200 ao MP."""
     if not _webhook_signature_ok(request):
         return HttpResponse(status=401)
 
@@ -249,27 +274,159 @@ def webhook_pix(request):
     # Responde 200 sempre que possível; processa de forma defensiva.
     if data_id and topic in (None, 'payment'):
         try:
-            info = mp_service.buscar_status(str(data_id))
-            ref = info.get('external_reference')
-            pix = (
-                PixPayment.objects.select_related('order')
-                .filter(mp_payment_id=str(data_id))
-                .first()
-            )
-            if pix is None and ref:
-                pix = (
-                    PixPayment.objects.select_related('order')
-                    .filter(external_reference=ref)
-                    .first()
-                )
-            if pix is not None:
-                pedidos_service.aplicar_status_mp(pix, info.get('status'))
+            _process_payment_webhook(str(data_id))
         except mp_service.PixError:
             logger.warning('Webhook: falha ao consultar pagamento %s', data_id)
         except Exception:  # noqa: BLE001 - nunca devolver 500 para o MP
             logger.exception('Webhook: erro inesperado ao processar %s', data_id)
 
     return HttpResponse(status=200)
+
+
+def _find_payment(mp_payment_id, external_reference=None):
+    """Acha o PixPayment ou CardPayment correspondente, por id do MP ou referência."""
+    for model in (PixPayment, CardPayment):
+        payment = model.objects.select_related('order').filter(mp_payment_id=mp_payment_id).first()
+        if payment is None and external_reference:
+            payment = (
+                model.objects.select_related('order')
+                .filter(external_reference=external_reference)
+                .first()
+            )
+        if payment is not None:
+            return payment
+    return None
+
+
+def _process_payment_webhook(data_id):
+    info = mp_service.buscar_status(data_id)
+    payment = _find_payment(data_id, info.get('external_reference'))
+    if payment is not None:
+        pedidos_service.aplicar_status_mp(payment, info.get('status'))
+
+
+# Mensagens amigáveis de recusa (sem expor o código interno do MP).
+_CARD_ERROR_MESSAGES = {
+    'cc_rejected_insufficient_amount': 'Saldo insuficiente.',
+    'cc_rejected_bad_filled_security_code': 'Código de segurança inválido.',
+    'cc_rejected_bad_filled_date': 'Data de validade inválida.',
+    'cc_rejected_bad_filled_other': 'Dados do cartão inválidos. Confira e tente novamente.',
+    'cc_rejected_call_for_authorize': 'Autorize o pagamento com seu banco e tente novamente.',
+    'cc_rejected_card_disabled': 'Cartão desabilitado. Use outro cartão.',
+    'cc_rejected_high_risk': 'Pagamento recusado. Tente outro meio de pagamento.',
+    'cc_rejected_max_attempts': 'Muitas tentativas. Use outro cartão.',
+}
+
+
+def _card_error_message(status_detail):
+    return _CARD_ERROR_MESSAGES.get(status_detail, 'Cartão recusado. Tente outro cartão.')
+
+
+def _card_payload(card, order, message=''):
+    return {
+        'ok': True,
+        'status': card.status,
+        'paymentId': card.mp_payment_id,
+        'message': message,
+        'requires_action': False,
+        'redirect_url': '',
+        'confirmation_url': reverse('orders:confirmation', args=[order.order_number]),
+    }
+
+
+@require_http_methods(['POST'])
+def card_pay(request, order_number):
+    """Processa o pagamento com cartão a partir do token gerado pelo Brick."""
+    order = get_object_or_404(Order, order_number=order_number)
+
+    # Idempotência: não cobra de novo se já houver pagamento aprovado/em análise.
+    existing = getattr(order, 'card_payment', None)
+    if existing and existing.status in (CardPayment.Status.APPROVED, CardPayment.Status.IN_PROCESS):
+        return JsonResponse(_card_payload(existing, order))
+
+    token = request.POST.get('token', '')
+    if not token:
+        return JsonResponse({'ok': False, 'error': 'Token do cartão ausente.'}, status=400)
+
+    try:
+        data = mp_service.criar_pagamento_cartao(
+            amount=order.total,
+            description=f'Pedido {order.order_number}',
+            token=token,
+            installments=request.POST.get('installments') or 1,
+            payment_method_id=request.POST.get('payment_method_id', ''),
+            issuer_id=request.POST.get('issuer_id', ''),
+            payer_email=request.POST.get('payer_email', '') or order.customer_email,
+            payer_cpf=request.POST.get('payer_cpf', '') or order.customer_cpf,
+            external_reference=order.order_number,
+        )
+    except mp_service.PixError as exc:
+        logger.exception('Falha ao processar cartão')
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=503)
+
+    card, _ = CardPayment.objects.update_or_create(
+        order=order,
+        defaults={
+            'mp_payment_id': data['id'],
+            'external_reference': order.order_number,
+            'status': data['status'],
+            'status_detail': data.get('status_detail', ''),
+            'amount': order.total,
+            'installments': data.get('installments', 1),
+            'payment_method_id': data.get('payment_method_id', ''),
+            'last_four': data.get('last_four', ''),
+        },
+    )
+    pedidos_service.aplicar_status_mp(card, data['status'])
+
+    payload = _card_payload(card, order)
+    if data['status'] == 'rejected':
+        payload['message'] = _card_error_message(data.get('status_detail'))
+    elif data.get('requires_action'):
+        payload['requires_action'] = True
+        payload['redirect_url'] = data.get('redirect_url', '')
+    return JsonResponse(payload)
+
+
+@require_http_methods(['GET'])
+def card_status(request, payment_id):
+    """Polling/refresh do status de um pagamento com cartão."""
+    card = get_object_or_404(CardPayment.objects.select_related('order'), mp_payment_id=payment_id)
+
+    if card.status in (CardPayment.Status.PENDING, CardPayment.Status.IN_PROCESS) \
+            and not settings.MERCADOPAGO_MOCK:
+        try:
+            info = mp_service.buscar_status(card.mp_payment_id)
+            pedidos_service.aplicar_status_mp(card, info.get('status'))
+        except mp_service.PixError:
+            logger.warning('Falha ao consultar status do cartão %s', card.mp_payment_id)
+
+    return JsonResponse({
+        'status': card.status,
+        'paid': card.status == CardPayment.Status.APPROVED,
+        'rejected': card.status == CardPayment.Status.REJECTED,
+        'confirmation_url': reverse('orders:confirmation', args=[card.order.order_number]),
+    })
+
+
+@require_http_methods(['GET'])
+def card_3ds_callback(request):
+    """Retorno da autenticação 3DS: consulta o status final e segue para a confirmação."""
+    payment_id = request.GET.get('payment_id') or request.GET.get('data.id') or ''
+    card = None
+    if payment_id:
+        card = CardPayment.objects.select_related('order').filter(mp_payment_id=payment_id).first()
+        if card is not None and not settings.MERCADOPAGO_MOCK:
+            try:
+                info = mp_service.buscar_status(card.mp_payment_id)
+                pedidos_service.aplicar_status_mp(card, info.get('status'))
+            except mp_service.PixError:
+                logger.warning('3DS callback: falha ao consultar %s', payment_id)
+
+    if card is not None:
+        return redirect('orders:confirmation', order_number=card.order.order_number)
+    messages.warning(request, 'Não foi possível confirmar o pagamento. Verifique seu pedido.')
+    return redirect('menu:menu_list')
 
 
 def _webhook_signature_ok(request):

@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import City, Neighborhood, Order, OrderItem, OrderItemOption, PixPayment
+from .models import (
+    CardPayment,
+    City,
+    Neighborhood,
+    Order,
+    OrderItem,
+    OrderItemOption,
+    PixPayment,
+)
 
 
 class NeighborhoodInline(admin.TabularInline):
@@ -99,6 +107,29 @@ class PixPaymentAdmin(admin.ModelAdmin):
         'qr_code_base64',
         'txid',
         'expires_at',
+        'created_at',
+        'updated_at',
+    )
+
+
+@admin.register(CardPayment)
+class CardPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        'external_reference', 'mp_payment_id', 'status',
+        'amount', 'installments', 'payment_method_id', 'created_at',
+    )
+    list_filter = ('status', 'payment_method_id', 'created_at')
+    search_fields = ('external_reference', 'mp_payment_id', 'order__order_number')
+    readonly_fields = (
+        'order',
+        'mp_payment_id',
+        'external_reference',
+        'status',
+        'status_detail',
+        'amount',
+        'installments',
+        'payment_method_id',
+        'last_four',
         'created_at',
         'updated_at',
     )

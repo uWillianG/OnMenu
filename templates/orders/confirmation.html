@@ -10,6 +10,12 @@
       <p class="eyebrow">✅ Pedido recebido</p>
       <h1>{{ order.order_number }}</h1>
       <p class="status-text">Status: <strong>{{ order.get_status_display }}</strong></p>
+      <p class="status-text">
+        Pagamento:
+        <span class="pay-badge {% if order.payment_status == 'paid' %}is-paid{% elif order.payment_status == 'rejected' %}is-rejected{% elif order.payment_status == 'in_process' %}is-process{% endif %}">
+          {{ order.get_payment_status_display }}
+        </span>
+      </p>
       <p class="status-text">Total: <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong></p>
       <div class="confirmation-actions">
         <a class="btn-secondary" href="{% url 'orders:track_order' order.order_number %}"

@@ -70,6 +70,7 @@ class Order(models.Model):
     class PaymentMethod(models.TextChoices):
         CASH = 'cash', 'Dinheiro'
         CARD_ON_DELIVERY = 'card_on_delivery', 'Cartão na entrega'
+        CREDIT_CARD = 'credit_card', 'Cartão de crédito'
         PIX = 'pix', 'PIX'
 
     class Status(models.TextChoices):
@@ -81,7 +82,9 @@ class Order(models.Model):
 
     class PaymentStatus(models.TextChoices):
         PENDING = 'pending', 'Pendente'
+        IN_PROCESS = 'in_process', 'Em análise'
         PAID = 'paid', 'Pago'
+        REJECTED = 'rejected', 'Recusado'
         CANCELLED = 'cancelled', 'Cancelado'
 
     restaurant = models.ForeignKey(
@@ -257,6 +260,51 @@ class PixPayment(models.Model):
 
     def __str__(self):
         return f'Pix {self.external_reference} ({self.get_status_display()})'
+
+
+class CardPayment(models.Model):
+    """A credit-card charge created at Mercado Pago for an order.
+
+    The card is tokenized in the browser (CardPayment Brick); only the token and
+    payment metadata reach the backend. Mirrors the MP payment status (via webhook
+    or polling). One charge per order.
+    """
+
+    class Status(models.TextChoices):
+        APPROVED = 'approved', 'Aprovado'
+        IN_PROCESS = 'in_process', 'Em análise'
+        PENDING = 'pending', 'Pendente'
+        REJECTED = 'rejected', 'Recusado'
+        CANCELLED = 'cancelled', 'Cancelado'
+        REFUNDED = 'refunded', 'Estornado'
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='card_payment',
+    )
+    mp_payment_id = models.CharField(max_length=64, blank=True, db_index=True)
+    external_reference = models.CharField(max_length=64, db_index=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    status_detail = models.CharField(max_length=80, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    installments = models.PositiveIntegerField(default=1)
+    payment_method_id = models.CharField(max_length=40, blank=True)  # visa, master…
+    last_four = models.CharField(max_length=4, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'pagamento com cartão'
+        verbose_name_plural = 'pagamentos com cartão'
+
+    def __str__(self):
+        return f'Cartão {self.external_reference} ({self.get_status_display()})'
 
 
 class OrderItemOption(models.Model):

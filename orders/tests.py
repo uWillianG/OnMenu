@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from menu.models import Category, MenuItem, Restaurant
 
-from .models import City, Neighborhood, Order, PixPayment
+from .models import CardPayment, City, Neighborhood, Order, PixPayment
 
 
 class OrderViewsTests(TestCase):
@@ -285,3 +285,157 @@ class PixPaymentTests(TestCase):
         cart_response = self.client.get(reverse('cart:cart_detail'))
         self.assertEqual(cart_response.status_code, 200)
         self.assertEqual(PixPayment.objects.count(), 1)
+
+
+class CardPaymentTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Test Kitchen', slug='test-kitchen', delivery_fee=Decimal('5.00'),
+        )
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        self.item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+
+    def _add_item(self, quantity=1):
+        self.client.post(reverse('cart:cart_add', args=[self.item.pk]), {'quantity': quantity})
+
+    def _checkout_card(self):
+        return self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+                'customer_name': 'Ada Lovelace',
+                'phone': '555-0100',
+                'payment_method': Order.PaymentMethod.CREDIT_CARD,
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+    def test_checkout_page_renders_card_modal_and_sdk(self):
+        self._add_item(quantity=1)
+        response = self.client.get(reverse('orders:checkout'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="card-modal"')
+        self.assertContains(response, 'id="card-section"')
+        self.assertContains(response, 'id="card-brick-container"')
+        # Formulário manual completo (modo sem credenciais)
+        self.assertContains(response, 'id="card-number"')
+        self.assertContains(response, 'id="card-expiry"')
+        self.assertContains(response, 'id="card-cvv"')
+        self.assertContains(response, 'id="card-installments"')
+        self.assertContains(response, 'sdk.mercadopago.com/js/v2')
+        self.assertContains(response, 'Cartão de crédito')
+
+    def test_checkout_card_creates_pending_order_and_returns_card_mode(self):
+        self._add_item(quantity=1)
+        response = self._checkout_card()
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['mode'], 'card')
+        self.assertIn('public_key', payload)
+        self.assertIn('card_pay_url', payload)
+
+        order = Order.objects.get()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+        self.assertEqual(payload['order_number'], order.order_number)
+
+    def _pay(self, order_number, token='MOCK-APPROVE'):
+        return self.client.post(
+            reverse('orders:card_pay', args=[order_number]),
+            {'token': token, 'installments': 1, 'payment_method_id': 'visa'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+    def test_card_pay_approved_marks_order_paid(self):
+        self._add_item(quantity=1)
+        order_number = self._checkout_card().json()['order_number']
+
+        response = self._pay(order_number, token='MOCK-APPROVE')
+        body = response.json()
+        self.assertTrue(body['ok'])
+        self.assertEqual(body['status'], 'approved')
+
+        order = Order.objects.get()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        card = CardPayment.objects.get()
+        self.assertEqual(card.status, CardPayment.Status.APPROVED)
+        self.assertEqual(card.amount, order.total)
+
+    def test_card_pay_rejected_shows_friendly_message(self):
+        self._add_item(quantity=1)
+        order_number = self._checkout_card().json()['order_number']
+
+        body = self._pay(order_number, token='MOCK-REJECT').json()
+        self.assertEqual(body['status'], 'rejected')
+        self.assertTrue(body['message'])
+        # Não expõe o código interno do MP.
+        self.assertNotIn('cc_rejected', body['message'])
+
+        order = Order.objects.get()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.REJECTED)
+
+    def test_card_pay_is_idempotent_when_already_approved(self):
+        self._add_item(quantity=1)
+        order_number = self._checkout_card().json()['order_number']
+        self._pay(order_number, token='MOCK-APPROVE')
+        # Segunda chamada não deve criar outra cobrança.
+        self._pay(order_number, token='MOCK-APPROVE')
+        self.assertEqual(CardPayment.objects.count(), 1)
+
+    def test_in_process_status_maps_to_order_in_analysis(self):
+        from orders.services import pedidos as pedidos_service
+
+        self._add_item(quantity=1)
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            customer_name='Grace Hopper',
+            phone='555-0101',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CREDIT_CARD,
+            subtotal=Decimal('20.00'),
+            total=Decimal('20.00'),
+        )
+        card = CardPayment.objects.create(
+            order=order,
+            external_reference=order.order_number,
+            status=CardPayment.Status.PENDING,
+            amount=order.total,
+        )
+
+        pedidos_service.aplicar_status_mp(card, 'in_process')
+        card.refresh_from_db()
+        self.assertEqual(card.status, CardPayment.Status.IN_PROCESS)
+        self.assertEqual(card.order.payment_status, Order.PaymentStatus.IN_PROCESS)
+
+    @patch('orders.services.mercadopago.buscar_status')
+    def test_webhook_card_marks_order_paid(self, mock_status):
+        self._add_item(quantity=1)
+        order_number = self._checkout_card().json()['order_number']
+        # Pagamento começa em análise para o webhook então confirmar.
+        self._pay(order_number)
+        card = CardPayment.objects.get()
+        card.status = CardPayment.Status.IN_PROCESS
+        card.save(update_fields=['status'])
+        Order.objects.filter(pk=card.order_id).update(payment_status=Order.PaymentStatus.IN_PROCESS)
+
+        mock_status.return_value = {
+            'id': card.mp_payment_id,
+            'status': 'approved',
+            'status_detail': 'accredited',
+            'external_reference': card.external_reference,
+        }
+        response = self.client.post(
+            reverse('orders:webhook_card'),
+            data=json.dumps({'type': 'payment', 'data': {'id': card.mp_payment_id}}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        card.refresh_from_db()
+        self.assertEqual(card.status, CardPayment.Status.APPROVED)
+        self.assertEqual(card.order.payment_status, Order.PaymentStatus.PAID)

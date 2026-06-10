@@ -111,6 +111,42 @@
         {% if form.payment_method.errors %}<ul class="errorlist">{% for e in form.payment_method.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
       </section>
 
+      <section class="checkout-card" id="card-section" hidden>
+        <div class="checkout-card-head"><span class="checkout-card-icon">💳</span>Dados do cartão</div>
+        <div id="card-brick-container"></div>
+        <div id="card-mock-form" hidden>
+          <div class="form-field">
+            <label class="form-label" for="card-number">Número do cartão</label>
+            <input class="form-input" id="card-number" inputmode="numeric" autocomplete="cc-number" maxlength="19" placeholder="0000 0000 0000 0000">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="card-holder">Nome do titular</label>
+            <input class="form-input" id="card-holder" type="text" autocomplete="cc-name" placeholder="Como está impresso no cartão">
+          </div>
+          <div class="card-grid">
+            <div class="form-field">
+              <label class="form-label" for="card-expiry">Validade</label>
+              <input class="form-input" id="card-expiry" inputmode="numeric" autocomplete="cc-exp" maxlength="5" placeholder="MM/AA">
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="card-cvv">CVV</label>
+              <input class="form-input" id="card-cvv" inputmode="numeric" autocomplete="cc-csc" maxlength="4" placeholder="123">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="card-cpf">CPF do titular</label>
+            <input class="form-input" id="card-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="card-installments">Parcelas</label>
+            <select class="form-select" id="card-installments"></select>
+          </div>
+          <ul class="errorlist js-card-local" id="card-local-errors" hidden></ul>
+          <button type="button" class="btn-primary" id="card-pay-btn">Pagar</button>
+          <p class="pix-muted" style="margin-top:10px;font-size:.78rem">Ambiente de teste. Para simular uma recusa, use um número terminado em <strong>0000</strong>.</p>
+        </div>
+      </section>
+
       <button class="btn-primary checkout-submit" type="submit">
         Confirmar pedido · {{ currency_symbol }} <span id="cta-total">{{ estimated_total|floatformat:2 }}</span>
       </button>
@@ -205,10 +241,56 @@
       </div>
     </div>
   </div>
+
+  <div id="card-modal" class="pix-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="card-modal-title">
+    <div class="pix-modal-backdrop" data-card-close></div>
+    <div class="pix-modal-panel" role="document">
+      <button type="button" class="pix-modal-close" data-card-close aria-label="Fechar">&times;</button>
+
+      <div class="pix-modal-head">
+        <span class="checkout-card-icon">💳</span>
+        <div>
+          <div class="pix-modal-title" id="card-modal-title">Pagar com cartão</div>
+          <div class="pix-modal-sub">Total <strong>{{ currency_symbol }} <span id="card-total">0,00</span></strong></div>
+        </div>
+      </div>
+
+      <!-- Estado: processando -->
+      <div class="pix-state" data-card-state="processing" hidden>
+        <div class="pix-spinner" aria-hidden="true"></div>
+        <p class="pix-muted">Processando pagamento…</p>
+      </div>
+
+      <!-- Estado: aprovado -->
+      <div class="pix-state" data-card-state="approved" hidden>
+        <div class="pix-approved-check" aria-hidden="true">✓</div>
+        <p>Pagamento aprovado! Redirecionando…</p>
+      </div>
+
+      <!-- Estado: em análise -->
+      <div class="pix-state" data-card-state="in_process" hidden>
+        <p>Pagamento em análise. Você será avisado quando for confirmado.</p>
+        <button type="button" class="btn-primary" id="card-view-order-btn">Ver pedido</button>
+      </div>
+
+      <!-- Estado: recusado -->
+      <div class="pix-state" data-card-state="rejected" hidden>
+        <p class="pay-error" id="card-error-msg">Cartão recusado.</p>
+        <button type="button" class="btn-primary" id="card-retry-btn">Tentar novamente</button>
+      </div>
+
+      <!-- Estado: erro de comunicação -->
+      <div class="pix-state" data-card-state="error" hidden>
+        <p class="pay-error" id="card-fatal-msg">Não foi possível processar o pagamento. Tente novamente.</p>
+        <button type="button" class="btn-secondary" data-card-close>Fechar</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://sdk.mercadopago.com/js/v2"></script>
 <script>
 (function () {
   const dataEl = document.getElementById('delivery-data');
@@ -520,6 +602,374 @@
       .catch(function () { showError(); })
       .finally(function () { if (submitBtn) submitBtn.disabled = false; });
   });
+})();
+</script>
+
+<script>
+(function () {
+  const form    = document.querySelector('.checkout-form');
+  const modal   = document.getElementById('card-modal');
+  const section = document.getElementById('card-section');
+  if (!form || !modal || !section) return;
+
+  const MAX_ATTEMPTS = 3;
+  const PUBLIC_KEY = '{{ mercadopago_public_key|escapejs }}';
+  const csrf = (form.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+  const submitBtn = form.querySelector('.checkout-submit');
+  const container = document.getElementById('card-brick-container');
+  const mockForm  = document.getElementById('card-mock-form');
+
+  let attempts = 0;
+  let brick = null;           // controlador do Brick (para destruir/remontar)
+  let mountedAmount = null;    // valor com que o Brick foi montado
+
+  function payMethod() {
+    const r = form.querySelector('input[name="payment_method"]:checked');
+    return r ? r.value : '';
+  }
+  function isCard() { return payMethod() === 'credit_card'; }
+
+  function currentAmount() {
+    const el = document.getElementById('summary-total');
+    return el ? (parseFloat((el.textContent || '0').replace(',', '.')) || 0) : 0;
+  }
+
+  // ---- Modal apenas para o resultado (processando/aprovado/recusado) ----
+  function showCardState(name) {
+    modal.querySelectorAll('[data-card-state]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-card-state') !== name;
+    });
+  }
+  function openModal() {
+    modal.hidden = false; modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    modal.hidden = true; modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+  modal.querySelectorAll('[data-card-close]').forEach(function (el) {
+    el.addEventListener('click', closeModal);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  // ---- Helpers de erro de campo (mesma convenção do bloco Pix) ----
+  function clearFieldErrors() {
+    form.querySelectorAll('.errorlist.js-pix-error').forEach(function (el) { el.remove(); });
+  }
+  function renderFieldErrors(errors) {
+    clearFieldErrors();
+    Object.keys(errors || {}).forEach(function (field) {
+      const input = form.querySelector('[name="' + field + '"]');
+      const wrap = input ? input.closest('.form-field') : null;
+      if (!wrap) return;
+      const ul = document.createElement('ul');
+      ul.className = 'errorlist js-pix-error';
+      errors[field].forEach(function (m) {
+        const li = document.createElement('li');
+        li.textContent = (typeof m === 'string') ? m : (m.message || '');
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+    });
+  }
+
+  // ---- Mostra/esconde a seção inline ao escolher o método ----
+  function togglePaymentUI() {
+    if (isCard()) {
+      section.hidden = false;
+      if (submitBtn) submitBtn.style.display = 'none';   // o botão de pagar é o do cartão
+      mountForm();
+    } else {
+      section.hidden = true;
+      if (submitBtn) submitBtn.style.display = '';
+      destroyBrick();
+    }
+  }
+
+  function mountForm() {
+    const canBrick = PUBLIC_KEY && typeof window.MercadoPago !== 'undefined';
+    if (canBrick) {
+      mockForm.hidden = true;
+      container.hidden = false;
+      mountBrick();
+    } else {
+      container.hidden = true;
+      mockForm.hidden = false;
+      populateInstallments();
+    }
+  }
+
+  function destroyBrick() {
+    if (brick && typeof brick.unmount === 'function') {
+      try { brick.unmount(); } catch (e) { /* noop */ }
+    }
+    brick = null;
+    if (container) container.innerHTML = '';
+    mountedAmount = null;
+  }
+
+  function mountBrick() {
+    const amount = currentAmount();
+    if (brick && mountedAmount === amount) return;  // já montado com o mesmo valor
+    destroyBrick();
+    if (amount <= 0) return;  // espera o total resolver (ex.: escolher bairro)
+    mountedAmount = amount;
+    try {
+      const mp = new window.MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+      const bricks = mp.bricks();
+      bricks.create('cardPayment', 'card-brick-container', {
+        initialization: { amount: amount },
+        callbacks: {
+          onReady: function () {},
+          onError: function () { /* erros de validação ficam no próprio Brick */ },
+          onSubmit: function (formData) {
+            return payWithCard({
+              token: formData.token,
+              installments: formData.installments,
+              payment_method_id: formData.payment_method_id,
+              issuer_id: formData.issuer_id,
+              payer_email: (formData.payer && formData.payer.email) || '',
+              payer_cpf: (formData.payer && formData.payer.identification && formData.payer.identification.number) || ''
+            });
+          }
+        }
+      }).then(function (controller) { brick = controller; });
+    } catch (e) {
+      openModal(); fatal('Não foi possível iniciar o pagamento com cartão.');
+    }
+  }
+
+  // ---- Formulário manual de cartão (modo sem credenciais) ----
+  function onlyDigits(v) { return (v || '').replace(/\D/g, ''); }
+  function currencySymbol() {
+    const s = document.querySelector('.checkout-summary');
+    return (s && s.dataset.currency) || 'R$';
+  }
+  function detectBrand(digits) {
+    if (/^4/.test(digits)) return 'visa';
+    if (/^(5[1-5]|2[2-7])/.test(digits)) return 'master';
+    if (/^3[47]/.test(digits)) return 'amex';
+    if (/^6/.test(digits)) return 'elo';
+    return 'visa';
+  }
+
+  function populateInstallments() {
+    const sel = document.getElementById('card-installments');
+    if (!sel) return;
+    const amount = currentAmount();
+    const prev = sel.value;
+    sel.innerHTML = '';
+    for (let i = 1; i <= 12; i++) {
+      const v = (amount / i).toFixed(2).replace('.', ',');
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = i + 'x de ' + currencySymbol() + ' ' + v + (i === 1 ? ' à vista' : ' sem juros');
+      sel.appendChild(opt);
+    }
+    if (prev) sel.value = prev;
+    const btn = document.getElementById('card-pay-btn');
+    if (btn) btn.textContent = 'Pagar · ' + currencySymbol() + ' ' + amount.toFixed(2).replace('.', ',');
+  }
+
+  // Máscaras dos campos
+  const numEl = document.getElementById('card-number');
+  const expEl = document.getElementById('card-expiry');
+  const cvvEl = document.getElementById('card-cvv');
+  const cpfEl = document.getElementById('card-cpf');
+  if (numEl) numEl.addEventListener('input', function () {
+    this.value = onlyDigits(this.value).slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
+  });
+  if (expEl) expEl.addEventListener('input', function () {
+    const d = onlyDigits(this.value).slice(0, 4);
+    this.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+  });
+  if (cvvEl) cvvEl.addEventListener('input', function () {
+    this.value = onlyDigits(this.value).slice(0, 4);
+  });
+  if (cpfEl) cpfEl.addEventListener('input', function () {
+    const d = onlyDigits(this.value).slice(0, 11);
+    let out = d.slice(0, 3);
+    if (d.length > 3) out += '.' + d.slice(3, 6);
+    if (d.length > 6) out += '.' + d.slice(6, 9);
+    if (d.length > 9) out += '-' + d.slice(9, 11);
+    this.value = out;
+  });
+
+  function validateMockForm() {
+    const errors = [];
+    const num = onlyDigits(numEl && numEl.value);
+    const holder = (document.getElementById('card-holder').value || '').trim();
+    const exp = onlyDigits(expEl && expEl.value);
+    const cvv = onlyDigits(cvvEl && cvvEl.value);
+    const cpf = onlyDigits(cpfEl && cpfEl.value);
+    if (num.length < 13) errors.push('Número do cartão inválido.');
+    if (!holder) errors.push('Informe o nome do titular.');
+    if (exp.length !== 4 || Number(exp.slice(0, 2)) < 1 || Number(exp.slice(0, 2)) > 12) {
+      errors.push('Validade inválida (MM/AA).');
+    }
+    if (cvv.length < 3) errors.push('CVV inválido.');
+    if (cpf.length !== 11) errors.push('CPF inválido.');
+    return errors;
+  }
+
+  function showLocalErrors(list) {
+    const ul = document.getElementById('card-local-errors');
+    if (!ul) return;
+    ul.innerHTML = '';
+    list.forEach(function (m) {
+      const li = document.createElement('li');
+      li.textContent = m;
+      ul.appendChild(li);
+    });
+    ul.hidden = list.length === 0;
+  }
+
+  const payBtn = document.getElementById('card-pay-btn');
+  if (payBtn) {
+    payBtn.addEventListener('click', function () {
+      const errors = validateMockForm();
+      if (errors.length) { showLocalErrors(errors); return; }
+      showLocalErrors([]);
+      const digits = onlyDigits(numEl && numEl.value);
+      payWithCard({
+        token: digits.slice(-4) === '0000' ? 'MOCK-REJECT' : 'MOCK-APPROVE',
+        installments: (document.getElementById('card-installments') || {}).value || 1,
+        payment_method_id: detectBrand(digits),
+        payer_cpf: (cpfEl && cpfEl.value) || ''
+      });
+    });
+  }
+
+  // ---- 1) cria o pedido (valida o checkout) e 2) processa o cartão ----
+  function payWithCard(cardData) {
+    clearFieldErrors();
+    const totalEl = document.getElementById('summary-total');
+    const cardTotal = document.getElementById('card-total');
+    if (cardTotal && totalEl) cardTotal.textContent = totalEl.textContent;
+    openModal();
+    showCardState('processing');
+
+    return fetch(form.action || window.location.href, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: new FormData(form)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        if (res.status === 400 && res.data.errors) {
+          closeModal();
+          renderFieldErrors(res.data.errors);
+          const first = form.querySelector('.js-pix-error');
+          if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          throw new Error('checkout_invalid');  // re-habilita o botão do Brick
+        }
+        if (!(res.data.ok && res.data.mode === 'card')) {
+          fatal(res.data.error);
+          throw new Error('checkout_failed');
+        }
+        return processCard(res.data, cardData);
+      })
+      .catch(function (err) {
+        if (!err || (err.message !== 'checkout_invalid' && err.message !== 'checkout_failed')) {
+          openModal(); fatal();
+        }
+        throw err;  // garante que o Brick reabilite o botão
+      });
+  }
+
+  function processCard(ctx, cardData) {
+    const body = new URLSearchParams();
+    body.set('token', cardData.token || '');
+    body.set('installments', cardData.installments || 1);
+    body.set('payment_method_id', cardData.payment_method_id || '');
+    body.set('issuer_id', cardData.issuer_id || '');
+    body.set('payer_email', cardData.payer_email || '');
+    body.set('payer_cpf', cardData.payer_cpf || '');
+
+    return fetch(ctx.card_pay_url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrf,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: body.toString()
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) { fatal(res.error); return; }
+        if (res.requires_action && res.redirect_url) {
+          window.location.href = res.redirect_url; return;
+        }
+        if (res.status === 'approved') {
+          showCardState('approved');
+          setTimeout(function () { window.location.href = res.confirmation_url; }, 1200);
+        } else if (res.status === 'in_process') {
+          const view = document.getElementById('card-view-order-btn');
+          if (view) view.onclick = function () { window.location.href = res.confirmation_url; };
+          showCardState('in_process');
+        } else if (res.status === 'rejected') {
+          attempts += 1;
+          showRejected(res.message);
+        } else {
+          fatal();
+        }
+      })
+      .catch(function () { fatal(); });
+  }
+
+  function showRejected(message) {
+    const msg = document.getElementById('card-error-msg');
+    const retry = document.getElementById('card-retry-btn');
+    if (msg) {
+      msg.textContent = attempts >= MAX_ATTEMPTS
+        ? 'Pagamento recusado várias vezes. Tente outro meio de pagamento.'
+        : (message || 'Cartão recusado.');
+    }
+    if (retry) retry.hidden = attempts >= MAX_ATTEMPTS;
+    showCardState('rejected');
+  }
+
+  // "Tentar novamente": fecha o resultado e volta para os campos inline.
+  const retryBtn = document.getElementById('card-retry-btn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', function () {
+      closeModal();
+      mountedAmount = null;  // força remontar o Brick
+      mountForm();
+      section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
+  function fatal(message) {
+    const el = document.getElementById('card-fatal-msg');
+    if (el && message) el.textContent = message;
+    showCardState('error');
+  }
+
+  // Evita submit por Enter quando cartão está selecionado (o Brick é quem paga).
+  form.addEventListener('submit', function (e) {
+    if (isCard()) e.preventDefault();
+  });
+
+  form.querySelectorAll('input[name="payment_method"]').forEach(function (r) {
+    r.addEventListener('change', togglePaymentUI);
+  });
+
+  // Remonta o Brick quando o total muda (taxa de entrega/bairro) e o cartão está visível.
+  const totalEl = document.getElementById('summary-total');
+  if (totalEl && typeof MutationObserver !== 'undefined') {
+    new MutationObserver(function () {
+      if (!isCard()) return;
+      if (PUBLIC_KEY && typeof window.MercadoPago !== 'undefined') mountBrick();
+      else populateInstallments();
+    }).observe(totalEl, { childList: true, characterData: true, subtree: true });
+  }
+
+  togglePaymentUI();
 })();
 </script>
 {% endblock %}

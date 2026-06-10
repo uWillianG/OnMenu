@@ -14,7 +14,11 @@ urlpatterns = [
     path('orders/track/<str:order_number>/', views.track_order, name='track_order'),
     path('orders/pix/<str:pix_id>/status/', views.pix_status, name='pix_status'),
     path('orders/pix/<str:order_number>/recreate/', views.pix_recreate, name='pix_recreate'),
+    path('orders/card/<str:order_number>/pay/', views.card_pay, name='card_pay'),
+    path('orders/card/<str:payment_id>/status/', views.card_status, name='card_status'),
+    path('pagamento/3ds-callback/', views.card_3ds_callback, name='card_3ds_callback'),
     path('webhook/pix/', views.webhook_pix, name='webhook_pix'),
+    path('webhook/cartao/', views.webhook_card, name='webhook_card'),
     path('staff/orders/', views.staff_order_list, name='staff_order_list'),
     path(
         'staff/orders/<str:order_number>/',

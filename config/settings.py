@@ -133,6 +133,8 @@ LOGOUT_REDIRECT_URL = 'menu:menu_list'
 # Access token da conta Mercado Pago. Sem token, o sistema roda em modo "mock"
 # (QR Code placeholder) para permitir testar a UI sem cobrança real.
 MERCADOPAGO_ACCESS_TOKEN = os.environ.get('MERCADOPAGO_ACCESS_TOKEN', '')
+# Chave pública usada pelo SDK MercadoPago.js no browser (tokenização do cartão).
+MERCADOPAGO_PUBLIC_KEY = os.environ.get('MERCADOPAGO_PUBLIC_KEY', '')
 # Secret usado para validar a assinatura (x-signature) dos webhooks do MP.
 MERCADOPAGO_WEBHOOK_SECRET = os.environ.get('MERCADOPAGO_WEBHOOK_SECRET', '')
 # URL pública do backend (para cadastrar o webhook no painel do MP).

@@ -1656,3 +1656,48 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   border-color: #1a9d4f;
   color: #fff;
 }
+
+/* Pagamento com cartão (Brick / mock) */
+#card-brick-container { min-height: 280px; }
+.pix-mock-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.pay-error {
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+  border: 1px solid #f7d4d8;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: .92rem;
+}
+
+/* Badge de status de pagamento (confirmação) */
+.pay-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.pay-badge.is-paid     { color: #15803d; background: #e9f7ef; border-color: #b7e2c7; }
+.pay-badge.is-rejected { color: var(--primary-dark); background: var(--primary-soft); border-color: #f7d4d8; }
+.pay-badge.is-process  { color: #92600a; background: #fdf3e3; border-color: #f4e0bb; }
+
+/* Formulário manual de cartão (modo sem credenciais) */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+#card-mock-form .errorlist.js-card-local {
+  margin: 4px 0 12px;
+}
