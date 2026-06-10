@@ -1115,6 +1115,16 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
 
 .form-textarea { resize: vertical; min-height: 80px; }
 
+/* custom chevron for selects (native arrow removed by appearance:none) */
+.form-select {
+  padding-right: 42px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 15px center;
+  cursor: pointer;
+}
+.form-select:disabled { background-color: var(--surface-2); color: var(--muted); cursor: not-allowed; }
+
 /* checkout summary — shown first on mobile so totals are visible up front */
 .checkout-summary { display: block; order: -1; }
 
@@ -1487,4 +1497,162 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
     animation-duration: .001ms !important;
     transition-duration: .001ms !important;
   }
+}
+
+/* ----------------------------------------------------------------------- */
+/* Pix payment modal                                                        */
+/* ----------------------------------------------------------------------- */
+.pix-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.pix-modal[hidden] { display: none; }
+
+.pix-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 24, 33, .55);
+  backdrop-filter: blur(2px);
+}
+
+.pix-modal-panel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 22px 20px 24px;
+  animation: pix-pop .18s ease-out;
+}
+@keyframes pix-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.pix-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pix-modal-close:hover { color: var(--text); }
+
+.pix-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.pix-modal-title { font-weight: 700; font-size: 1.15rem; color: var(--text); }
+.pix-modal-sub   { font-size: .85rem; color: var(--muted); }
+
+.pix-state { text-align: center; }
+.pix-total {
+  font-size: 1rem;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.pix-total strong { color: var(--primary); font-size: 1.25rem; }
+
+.pix-qr {
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 14px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pix-qr img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.pix-countdown {
+  font-size: .9rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.pix-countdown strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.pix-copy {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 16px;
+}
+.pix-copy .form-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .8rem;
+  flex: 1;
+  min-width: 0;
+}
+.pix-copy .btn-secondary { white-space: nowrap; }
+
+.pix-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.pix-muted { color: var(--muted); font-size: .9rem; }
+
+.pix-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 8px auto 14px;
+  border: 3px solid var(--surface-2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: pix-spin .8s linear infinite;
+}
+.pix-spinner-sm { width: 18px; height: 18px; margin: 0; border-width: 2px; }
+@keyframes pix-spin { to { transform: rotate(360deg); } }
+
+.pix-approved-check {
+  width: 56px;
+  height: 56px;
+  margin: 6px auto 12px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 30px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pix-modal-panel { animation: none; }
+}
+
+/* Pix: feedback verde ao copiar o código copia-e-cola */
+.pix-copy .form-input.is-copied {
+  border-color: #1a9d4f;
+  box-shadow: 0 0 0 2px rgba(26, 157, 79, .18);
+}
+.btn-secondary.is-copied {
+  background: #1a9d4f;
+  border-color: #1a9d4f;
+  color: #fff;
 }

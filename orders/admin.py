@@ -1,6 +1,28 @@
 from django.contrib import admin
 
-from .models import Order, OrderItem, OrderItemOption
+from .models import City, Neighborhood, Order, OrderItem, OrderItemOption, PixPayment
+
+
+class NeighborhoodInline(admin.TabularInline):
+    model = Neighborhood
+    extra = 1
+    fields = ('name', 'delivery_fee', 'is_active')
+
+
+@admin.register(City)
+class CityAdmin(admin.ModelAdmin):
+    list_display = ('name', 'delivery_fee', 'is_active')
+    list_editable = ('delivery_fee', 'is_active')
+    search_fields = ('name',)
+    inlines = [NeighborhoodInline]
+
+
+@admin.register(Neighborhood)
+class NeighborhoodAdmin(admin.ModelAdmin):
+    list_display = ('name', 'city', 'delivery_fee', 'is_active')
+    list_editable = ('delivery_fee', 'is_active')
+    list_filter = ('city', 'is_active')
+    search_fields = ('name', 'city__name')
 
 
 class OrderItemOptionInline(admin.TabularInline):
@@ -31,6 +53,7 @@ class OrderAdmin(admin.ModelAdmin):
         'customer_name',
         'fulfillment_method',
         'payment_method',
+        'payment_status',
         'status',
         'total',
         'created_at',
@@ -39,6 +62,7 @@ class OrderAdmin(admin.ModelAdmin):
         'restaurant',
         'fulfillment_method',
         'payment_method',
+        'payment_status',
         'status',
         'created_at',
     )
@@ -59,3 +83,22 @@ class OrderAdmin(admin.ModelAdmin):
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ('order', 'item_name', 'quantity', 'unit_price', 'line_total')
     search_fields = ('order__order_number', 'item_name')
+
+
+@admin.register(PixPayment)
+class PixPaymentAdmin(admin.ModelAdmin):
+    list_display = ('external_reference', 'mp_payment_id', 'status', 'amount', 'expires_at', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('external_reference', 'mp_payment_id', 'order__order_number')
+    readonly_fields = (
+        'order',
+        'mp_payment_id',
+        'external_reference',
+        'amount',
+        'qr_code_text',
+        'qr_code_base64',
+        'txid',
+        'expires_at',
+        'created_at',
+        'updated_at',
+    )

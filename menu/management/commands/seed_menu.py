@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand
 
 from menu.models import Category, ItemOptionChoice, ItemOptionGroup, MenuItem, Restaurant
+from orders.models import City, Neighborhood
 
 
 class Command(BaseCommand):
@@ -24,6 +25,33 @@ class Command(BaseCommand):
                 'is_active': True,
             },
         )
+
+        # ── Áreas de entrega (cidade + bairro, cada um com sua taxa) ──
+        # Taxa total = taxa da cidade + taxa do bairro.
+        delivery_areas = {
+            ('Curitiba', Decimal('0.00')): [
+                ('Centro',      Decimal('6.00')),
+                ('Batel',       Decimal('8.00')),
+                ('Água Verde',  Decimal('7.00')),
+                ('Portão',      Decimal('6.00')),
+                ('Boqueirão',   Decimal('9.00')),
+            ],
+            ('São José dos Pinhais', Decimal('4.00')): [
+                ('Centro',       Decimal('7.00')),
+                ('Afonso Pena',  Decimal('8.00')),
+            ],
+        }
+        for (city_name, city_fee), bairros in delivery_areas.items():
+            city, _ = City.objects.update_or_create(
+                name=city_name,
+                defaults={'delivery_fee': city_fee, 'is_active': True},
+            )
+            for bairro_name, bairro_fee in bairros:
+                Neighborhood.objects.update_or_create(
+                    city=city,
+                    name=bairro_name,
+                    defaults={'delivery_fee': bairro_fee, 'is_active': True},
+                )
 
         categories_data = [
             ('entradas',           'Entradas',          10),

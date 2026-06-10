@@ -42,6 +42,14 @@
             value="{{ form.phone.value|default:'' }}" autocomplete="tel" placeholder="Ex: (11) 99999-0000">
           {% if form.phone.errors %}<ul class="errorlist">{% for e in form.phone.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
+
+        <div id="pix-fields" hidden>
+          <div class="form-field">
+            <label class="form-label" for="{{ form.customer_cpf.id_for_label }}">CPF <span class="form-label-opt">(para o Pix)</span></label>
+            {{ form.customer_cpf }}
+            {% if form.customer_cpf.errors %}<ul class="errorlist">{% for e in form.customer_cpf.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
       </section>
 
       <section class="checkout-card" id="address-section">
@@ -49,15 +57,15 @@
         <div class="address-grid">
 
           <div class="form-field">
-            <label class="form-label" for="{{ form.address_cep.id_for_label }}">CEP</label>
-            {{ form.address_cep }}
-            {% if form.address_cep.errors %}<ul class="errorlist">{% for e in form.address_cep.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            <label class="form-label" for="id_city">Cidade</label>
+            {{ form.city }}
+            {% if form.city.errors %}<ul class="errorlist">{% for e in form.city.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="{{ form.address_city.id_for_label }}">Cidade</label>
-            {{ form.address_city }}
-            {% if form.address_city.errors %}<ul class="errorlist">{% for e in form.address_city.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            <label class="form-label" for="id_neighborhood">Bairro</label>
+            {{ form.neighborhood }}
+            {% if form.neighborhood.errors %}<ul class="errorlist">{% for e in form.neighborhood.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
           </div>
 
           <div class="form-field span-2">
@@ -73,12 +81,6 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="{{ form.address_neighborhood.id_for_label }}">Bairro</label>
-            {{ form.address_neighborhood }}
-            {% if form.address_neighborhood.errors %}<ul class="errorlist">{% for e in form.address_neighborhood.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-          </div>
-
-          <div class="form-field span-2">
             <label class="form-label" for="{{ form.address_complement.id_for_label }}">Complemento <span class="form-label-opt">(opcional)</span></label>
             {{ form.address_complement }}
           </div>
@@ -116,7 +118,7 @@
 
     <aside class="checkout-summary"
            data-subtotal="{{ subtotal|floatformat:2 }}"
-           data-delivery="{{ delivery_fee|floatformat:2 }}">
+           data-currency="{{ currency_symbol }}">
       <div class="cart-summary-panel">
         <div class="summary-title">Resumo do pedido</div>
         <div class="summary-items">
@@ -134,7 +136,7 @@
         </div>
         <div class="summary-row" id="summary-delivery-row">
           <span>Taxa de entrega</span>
-          <strong>{{ currency_symbol }} {{ delivery_fee|floatformat:2 }}</strong>
+          <strong id="summary-delivery-val">{{ currency_symbol }} {{ delivery_fee|floatformat:2 }}</strong>
         </div>
         <div class="summary-row grand">
           <span>Total</span>
@@ -144,36 +146,380 @@
     </aside>
 
   </div>
+
+  {{ delivery_areas|json_script:"delivery-data" }}
+
+  <div id="pix-modal" class="pix-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="pix-modal-title">
+    <div class="pix-modal-backdrop" data-pix-close></div>
+    <div class="pix-modal-panel" role="document">
+      <button type="button" class="pix-modal-close" data-pix-close aria-label="Fechar">&times;</button>
+
+      <div class="pix-modal-head">
+        <span class="checkout-card-icon">⚡</span>
+        <div>
+          <div class="pix-modal-title" id="pix-modal-title">Pague com Pix</div>
+          <div class="pix-modal-sub">Pedido <strong id="pix-order-number">—</strong></div>
+        </div>
+      </div>
+
+      <!-- Estado: carregando -->
+      <div class="pix-state" data-pix-state="loading">
+        <div class="pix-spinner" aria-hidden="true"></div>
+        <p class="pix-muted">Gerando cobrança…</p>
+      </div>
+
+      <!-- Estado: aguardando pagamento -->
+      <div class="pix-state" data-pix-state="waiting" hidden>
+        <div class="pix-total">Total <strong>{{ currency_symbol }} <span id="pix-total">0,00</span></strong></div>
+        <div class="pix-qr">
+          <img id="pix-qr-img" alt="QR Code Pix" />
+        </div>
+        <div class="pix-countdown">Expira em <strong id="pix-timer">30:00</strong></div>
+        <label class="form-label" for="pix-copia-cola">Pix copia e cola</label>
+        <div class="pix-copy">
+          <input type="text" id="pix-copia-cola" class="form-input" readonly />
+          <button type="button" class="btn-secondary" id="pix-copy-btn">Copiar</button>
+        </div>
+        <div class="pix-waiting">
+          <div class="pix-spinner pix-spinner-sm" aria-hidden="true"></div>
+          <span class="pix-muted">Aguardando confirmação do pagamento…</span>
+        </div>
+      </div>
+
+      <!-- Estado: expirado -->
+      <div class="pix-state" data-pix-state="expired" hidden>
+        <p class="pix-muted">A cobrança expirou. Gere um novo Pix para continuar.</p>
+        <button type="button" class="btn-primary" id="pix-recreate-btn">Gerar novo Pix</button>
+      </div>
+
+      <!-- Estado: aprovado -->
+      <div class="pix-state" data-pix-state="approved" hidden>
+        <div class="pix-approved-check" aria-hidden="true">✓</div>
+        <p>Pagamento aprovado! Redirecionando…</p>
+      </div>
+
+      <!-- Estado: erro -->
+      <div class="pix-state" data-pix-state="error" hidden>
+        <p class="pix-muted" id="pix-error-msg">Não foi possível gerar a cobrança.</p>
+        <button type="button" class="btn-secondary" data-pix-close>Fechar</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 (function () {
-  const section   = document.getElementById('address-section');
-  const radios    = document.querySelectorAll('input[name="fulfillment_method"]');
-  const summary   = document.querySelector('.checkout-summary');
-  const delRow    = document.getElementById('summary-delivery-row');
-  const totalEl   = document.getElementById('summary-total');
-  const ctaTotal  = document.getElementById('cta-total');
+  const dataEl = document.getElementById('delivery-data');
+  const AREAS  = dataEl ? JSON.parse(dataEl.textContent) : {};
 
-  const subtotal  = parseFloat((summary?.dataset.subtotal || '0').replace(',', '.'));
-  const delivery  = parseFloat((summary?.dataset.delivery || '0').replace(',', '.'));
+  const section  = document.getElementById('address-section');
+  const radios   = document.querySelectorAll('input[name="fulfillment_method"]');
+  const citySel  = document.getElementById('id_city');
+  const nbSel    = document.getElementById('id_neighborhood');
+  const summary  = document.querySelector('.checkout-summary');
+  const delRow   = document.getElementById('summary-delivery-row');
+  const delVal   = document.getElementById('summary-delivery-val');
+  const totalEl  = document.getElementById('summary-total');
+  const ctaTotal = document.getElementById('cta-total');
 
-  function fmt(n) { return n.toFixed(2); }
+  const CURRENCY = summary ? (summary.dataset.currency || '') : '';
+  const subtotal = num(summary && summary.dataset.subtotal);
 
-  function update() {
-    const val = document.querySelector('input[name="fulfillment_method"]:checked')?.value;
-    const isPickup = val === 'pickup';
-    if (section) section.style.display = isPickup ? 'none' : '';
-    if (delRow)  delRow.style.display  = isPickup ? 'none' : '';
-    const total = subtotal + (isPickup ? 0 : delivery);
-    if (totalEl)  totalEl.textContent  = fmt(total);
-    if (ctaTotal) ctaTotal.textContent = fmt(total);
+  function num(v) { return parseFloat((v || '0').toString().replace(',', '.')) || 0; }
+  function money(n) { return n.toFixed(2); }
+
+  function buildNeighborhoods(cityId, selectId) {
+    if (!nbSel) return;
+    nbSel.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = cityId ? 'Selecione o bairro' : 'Selecione a cidade primeiro';
+    nbSel.appendChild(placeholder);
+    const city = AREAS[cityId];
+    if (city) {
+      city.neighborhoods.forEach(function (n) {
+        const opt = document.createElement('option');
+        opt.value = n.id;
+        opt.textContent = n.name;
+        opt.dataset.fee = n.fee;
+        if (String(n.id) === String(selectId)) opt.selected = true;
+        nbSel.appendChild(opt);
+      });
+    }
+    nbSel.disabled = !cityId;
   }
 
-  radios.forEach((r) => r.addEventListener('change', update));
+  function isPickup() {
+    const r = document.querySelector('input[name="fulfillment_method"]:checked');
+    return r && r.value === 'pickup';
+  }
+
+  function update() {
+    const pickup = isPickup();
+    if (section) section.style.display = pickup ? 'none' : '';
+    if (delRow)  delRow.style.display  = pickup ? 'none' : '';
+
+    let fee = 0;
+    let resolved = pickup;
+    if (!pickup && citySel && nbSel && citySel.value && nbSel.value) {
+      const cityFee = num(AREAS[citySel.value] && AREAS[citySel.value].fee);
+      const nbOpt   = nbSel.selectedOptions[0];
+      fee = cityFee + num(nbOpt && nbOpt.dataset.fee);
+      resolved = true;
+    }
+
+    if (delVal) {
+      delVal.textContent = (!pickup && !resolved)
+        ? 'Selecione o bairro'
+        : CURRENCY + ' ' + money(fee);
+    }
+    const total = subtotal + fee;
+    if (totalEl)  totalEl.textContent  = money(total);
+    if (ctaTotal) ctaTotal.textContent = money(total);
+  }
+
+  if (citySel) {
+    buildNeighborhoods(citySel.value, nbSel ? nbSel.value : null);
+    citySel.addEventListener('change', function () { buildNeighborhoods(this.value, null); update(); });
+  }
+  if (nbSel) nbSel.addEventListener('change', update);
+  radios.forEach(function (r) { r.addEventListener('change', update); });
   update();
+})();
+</script>
+
+<script>
+(function () {
+  const form      = document.querySelector('.checkout-form');
+  const modal     = document.getElementById('pix-modal');
+  if (!form || !modal) return;
+
+  const pixFields = document.getElementById('pix-fields');
+  const POLL_MS   = 5000;
+  const csrf      = (form.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+  let pollTimer = null;
+  let tickTimer = null;
+  let currentOrder = null;
+
+  function payMethod() {
+    const r = form.querySelector('input[name="payment_method"]:checked');
+    return r ? r.value : '';
+  }
+  function isPix() { return payMethod() === 'pix'; }
+
+  function togglePixFields() {
+    if (pixFields) pixFields.hidden = !isPix();
+  }
+  form.querySelectorAll('input[name="payment_method"]').forEach(function (r) {
+    r.addEventListener('change', togglePixFields);
+  });
+  togglePixFields();
+
+  // Máscara de CPF: 000.000.000-00 enquanto digita.
+  const cpfInput = document.getElementById('{{ form.customer_cpf.id_for_label }}');
+  if (cpfInput) {
+    const maskCpf = function (value) {
+      const d = (value || '').replace(/\D/g, '').slice(0, 11);
+      let out = d.slice(0, 3);
+      if (d.length > 3) out += '.' + d.slice(3, 6);
+      if (d.length > 6) out += '.' + d.slice(6, 9);
+      if (d.length > 9) out += '-' + d.slice(9, 11);
+      return out;
+    };
+    cpfInput.addEventListener('input', function () {
+      const start = this.selectionStart === this.value.length;
+      this.value = maskCpf(this.value);
+      if (start) this.setSelectionRange(this.value.length, this.value.length);
+    });
+    cpfInput.value = maskCpf(cpfInput.value);
+  }
+
+  function showState(name) {
+    modal.querySelectorAll('[data-pix-state]').forEach(function (el) {
+      el.hidden = el.getAttribute('data-pix-state') !== name;
+    });
+  }
+  function openModal() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    stopPolling();
+    stopTimer();
+  }
+  function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+  function stopTimer()   { if (tickTimer) { clearInterval(tickTimer); tickTimer = null; } }
+
+  modal.querySelectorAll('[data-pix-close]').forEach(function (el) {
+    el.addEventListener('click', closeModal);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  // ----- Render da cobrança -----
+  function renderCharge(data) {
+    currentOrder = data.order_number;
+    const img = document.getElementById('pix-qr-img');
+    if (img) img.src = 'data:image/png;base64,' + (data.qrCodeBase64 || '');
+    const code = document.getElementById('pix-copia-cola');
+    if (code) code.value = data.qrCodeText || '';
+    const num = document.getElementById('pix-order-number');
+    if (num) num.textContent = data.order_number || '—';
+    const totalEl = document.getElementById('summary-total');
+    const pixTotal = document.getElementById('pix-total');
+    if (pixTotal && totalEl) pixTotal.textContent = totalEl.textContent;
+
+    showState('waiting');
+    startTimer(data.expiracao);
+    startPolling(data.pixId, data.confirmation_url);
+  }
+
+  // ----- Contagem regressiva -----
+  function startTimer(expiracao) {
+    stopTimer();
+    const end = expiracao ? new Date(expiracao).getTime() : (Date.now() + 30 * 60000);
+    const timerEl = document.getElementById('pix-timer');
+    function tick() {
+      const left = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      const m = String(Math.floor(left / 60)).padStart(2, '0');
+      const s = String(left % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = m + ':' + s;
+      if (left <= 0) { stopTimer(); stopPolling(); showState('expired'); }
+    }
+    tick();
+    tickTimer = setInterval(tick, 1000);
+  }
+
+  // ----- Polling de status -----
+  function startPolling(pixId, confirmationUrl) {
+    stopPolling();
+    pollTimer = setInterval(function () {
+      fetch('/orders/pix/' + encodeURIComponent(pixId) + '/status/', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (s.paid) {
+            stopPolling(); stopTimer();
+            showState('approved');
+            setTimeout(function () { window.location.href = s.confirmation_url || confirmationUrl; }, 1200);
+          } else if (s.cancelled) {
+            stopPolling(); stopTimer();
+            showState('expired');
+          }
+        })
+        .catch(function () { /* ignora falhas transitórias de rede */ });
+    }, POLL_MS);
+  }
+
+  // ----- Copiar código -----
+  const copyBtn = document.getElementById('pix-copy-btn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function () {
+      const code = document.getElementById('pix-copia-cola');
+      if (!code) return;
+      code.select();
+      const done = function () {
+        copyBtn.textContent = 'Copiado!';
+        copyBtn.classList.add('is-copied');
+        code.classList.add('is-copied');
+        setTimeout(function () {
+          copyBtn.textContent = 'Copiar';
+          copyBtn.classList.remove('is-copied');
+          code.classList.remove('is-copied');
+        }, 1800);
+      };
+      if (navigator.clipboard) { navigator.clipboard.writeText(code.value).then(done, done); }
+      else { document.execCommand('copy'); done(); }
+    });
+  }
+
+  // ----- Gerar novo Pix -----
+  const recreateBtn = document.getElementById('pix-recreate-btn');
+  if (recreateBtn) {
+    recreateBtn.addEventListener('click', function () {
+      if (!currentOrder) { closeModal(); return; }
+      showState('loading');
+      fetch('/orders/pix/' + encodeURIComponent(currentOrder) + '/recreate/', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf }
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.paid) { window.location.href = data.confirmation_url; return; }
+          if (data.ok) { renderCharge(data); } else { showError(data.error); }
+        })
+        .catch(function () { showError(); });
+    });
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('pix-error-msg');
+    if (el && msg) el.textContent = msg;
+    showState('error');
+  }
+
+  function clearFieldErrors() {
+    form.querySelectorAll('.errorlist.js-pix-error').forEach(function (el) { el.remove(); });
+  }
+  function renderFieldErrors(errors) {
+    clearFieldErrors();
+    Object.keys(errors || {}).forEach(function (field) {
+      const input = form.querySelector('[name="' + field + '"]');
+      const wrap = input ? input.closest('.form-field') : null;
+      if (!wrap) return;
+      const ul = document.createElement('ul');
+      ul.className = 'errorlist js-pix-error';
+      errors[field].forEach(function (m) {
+        const li = document.createElement('li');
+        li.textContent = (typeof m === 'string') ? m : (m.message || '');
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+    });
+  }
+
+  // ----- Intercepta o submit quando Pix -----
+  form.addEventListener('submit', function (e) {
+    if (!isPix()) return; // demais métodos seguem o submit normal
+    e.preventDefault();
+    clearFieldErrors();
+
+    const submitBtn = form.querySelector('.checkout-submit');
+    if (submitBtn) submitBtn.disabled = true;
+
+    openModal();
+    showState('loading');
+
+    fetch(form.action || window.location.href, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: new FormData(form)
+    })
+      .then(function (r) { return r.json().then(function (d) { return { status: r.status, data: d }; }); })
+      .then(function (res) {
+        if (res.status === 400 && res.data.errors) {
+          closeModal();
+          renderFieldErrors(res.data.errors);
+          const first = form.querySelector('.js-pix-error');
+          if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (res.data.ok) {
+          renderCharge(res.data);
+        } else {
+          showError(res.data.error);
+        }
+      })
+      .catch(function () { showError(); })
+      .finally(function () { if (submitBtn) submitBtn.disabled = false; });
+  });
 })();
 </script>
 {% endblock %}

@@ -12,7 +12,7 @@
       <h1>{{ restaurant.name }}</h1>
       <div class="hero-chips">
         {% if restaurant.accepts_delivery %}
-          <span class="hero-chip">🛵 Entrega · {{ currency_symbol }} {{ restaurant.delivery_fee|floatformat:2 }}</span>
+          <span class="hero-chip">🛵 Entrega disponível</span>
         {% endif %}
         {% if restaurant.accepts_pickup %}
           <span class="hero-chip">🏪 Retirada grátis</span>

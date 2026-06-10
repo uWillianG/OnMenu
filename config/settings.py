@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -127,6 +128,21 @@ CART_SESSION_ID = 'onmenu_cart'
 CURRENCY_SYMBOL = 'R$'
 LOGIN_REDIRECT_URL = 'orders:staff_order_list'
 LOGOUT_REDIRECT_URL = 'menu:menu_list'
+
+# --- Mercado Pago / Pix ---
+# Access token da conta Mercado Pago. Sem token, o sistema roda em modo "mock"
+# (QR Code placeholder) para permitir testar a UI sem cobrança real.
+MERCADOPAGO_ACCESS_TOKEN = os.environ.get('MERCADOPAGO_ACCESS_TOKEN', '')
+# Secret usado para validar a assinatura (x-signature) dos webhooks do MP.
+MERCADOPAGO_WEBHOOK_SECRET = os.environ.get('MERCADOPAGO_WEBHOOK_SECRET', '')
+# URL pública do backend (para cadastrar o webhook no painel do MP).
+BASE_URL = os.environ.get('BASE_URL', 'http://localhost:8000')
+# Mock ligado automaticamente quando não há token configurado.
+MERCADOPAGO_MOCK = not MERCADOPAGO_ACCESS_TOKEN
+# Validade da cobrança Pix, em minutos.
+PIX_EXPIRATION_MINUTES = 30
+# E-mail do pagador enviado ao Mercado Pago (não coletamos e-mail no checkout).
+PIX_DEFAULT_PAYER_EMAIL = os.environ.get('PIX_DEFAULT_PAYER_EMAIL', 'comprador@onmenu.com.br')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
