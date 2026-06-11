@@ -8,7 +8,7 @@
 
   <div class="checkout-layout">
 
-    <form method="post" class="checkout-form">
+    <form method="post" class="checkout-form" id="checkout-form-main">
       {% csrf_token %}
 
       <section class="checkout-card">
@@ -137,19 +137,12 @@
             <label class="form-label" for="card-cpf">CPF do titular</label>
             <input class="form-input" id="card-cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00">
           </div>
-          <div class="form-field">
-            <label class="form-label" for="card-installments">Parcelas</label>
-            <select class="form-select" id="card-installments"></select>
-          </div>
+          <p class="pix-muted" style="font-size:.82rem">Pagamento à vista (em 1x).</p>
           <ul class="errorlist js-card-local" id="card-local-errors" hidden></ul>
-          <button type="button" class="btn-primary" id="card-pay-btn">Pagar</button>
-          <p class="pix-muted" style="margin-top:10px;font-size:.78rem">Ambiente de teste. Para simular uma recusa, use um número terminado em <strong>0000</strong>.</p>
+          <p class="pix-muted" style="font-size:.78rem">Ambiente de teste. Para simular uma recusa, use um número terminado em <strong>0000</strong>.</p>
         </div>
       </section>
 
-      <button class="btn-primary checkout-submit" type="submit">
-        Confirmar pedido · {{ currency_symbol }} <span id="cta-total">{{ estimated_total|floatformat:2 }}</span>
-      </button>
     </form>
 
     <aside class="checkout-summary"
@@ -180,6 +173,10 @@
         </div>
       </div>
     </aside>
+
+    <button class="btn-primary checkout-submit" type="submit" form="checkout-form-main">
+      Confirmar pedido · {{ currency_symbol }} <span id="cta-total">{{ estimated_total|floatformat:2 }}</span>
+    </button>
 
   </div>
 
@@ -305,6 +302,7 @@
   const delVal   = document.getElementById('summary-delivery-val');
   const totalEl  = document.getElementById('summary-total');
   const ctaTotal = document.getElementById('cta-total');
+  const cartBtn  = document.getElementById('cart-btn-total');
 
   const CURRENCY = summary ? (summary.dataset.currency || '') : '';
   const subtotal = num(summary && summary.dataset.subtotal);
@@ -360,6 +358,7 @@
     const total = subtotal + fee;
     if (totalEl)  totalEl.textContent  = money(total);
     if (ctaTotal) ctaTotal.textContent = money(total);
+    if (cartBtn)  cartBtn.textContent  = CURRENCY + ' ' + money(total);
   }
 
   if (citySel) {
@@ -575,7 +574,7 @@
     e.preventDefault();
     clearFieldErrors();
 
-    const submitBtn = form.querySelector('.checkout-submit');
+    const submitBtn = document.querySelector('.checkout-submit');
     if (submitBtn) submitBtn.disabled = true;
 
     openModal();
@@ -615,7 +614,7 @@
   const MAX_ATTEMPTS = 3;
   const PUBLIC_KEY = '{{ mercadopago_public_key|escapejs }}';
   const csrf = (form.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
-  const submitBtn = form.querySelector('.checkout-submit');
+  const submitBtn = document.querySelector('.checkout-submit');
   const container = document.getElementById('card-brick-container');
   const mockForm  = document.getElementById('card-mock-form');
 
@@ -676,12 +675,18 @@
     });
   }
 
+  function brickMode() {
+    return PUBLIC_KEY && typeof window.MercadoPago !== 'undefined';
+  }
+
   // ---- Mostra/esconde a seção inline ao escolher o método ----
   function togglePaymentUI() {
     if (isCard()) {
       section.hidden = false;
-      if (submitBtn) submitBtn.style.display = 'none';   // o botão de pagar é o do cartão
       mountForm();
+      // O cartão usa o mesmo botão "Confirmar pedido". Só no Brick real (que
+      // traz o próprio botão de pagar) o botão principal é ocultado.
+      if (submitBtn) submitBtn.style.display = brickMode() ? 'none' : '';
     } else {
       section.hidden = true;
       if (submitBtn) submitBtn.style.display = '';
@@ -690,15 +695,13 @@
   }
 
   function mountForm() {
-    const canBrick = PUBLIC_KEY && typeof window.MercadoPago !== 'undefined';
-    if (canBrick) {
+    if (brickMode()) {
       mockForm.hidden = true;
       container.hidden = false;
       mountBrick();
     } else {
       container.hidden = true;
       mockForm.hidden = false;
-      populateInstallments();
     }
   }
 
@@ -722,6 +725,7 @@
       const bricks = mp.bricks();
       bricks.create('cardPayment', 'card-brick-container', {
         initialization: { amount: amount },
+        customization: { paymentMethods: { maxInstallments: 1, minInstallments: 1 } },
         callbacks: {
           onReady: function () {},
           onError: function () { /* erros de validação ficam no próprio Brick */ },
@@ -744,34 +748,12 @@
 
   // ---- Formulário manual de cartão (modo sem credenciais) ----
   function onlyDigits(v) { return (v || '').replace(/\D/g, ''); }
-  function currencySymbol() {
-    const s = document.querySelector('.checkout-summary');
-    return (s && s.dataset.currency) || 'R$';
-  }
   function detectBrand(digits) {
     if (/^4/.test(digits)) return 'visa';
     if (/^(5[1-5]|2[2-7])/.test(digits)) return 'master';
     if (/^3[47]/.test(digits)) return 'amex';
     if (/^6/.test(digits)) return 'elo';
     return 'visa';
-  }
-
-  function populateInstallments() {
-    const sel = document.getElementById('card-installments');
-    if (!sel) return;
-    const amount = currentAmount();
-    const prev = sel.value;
-    sel.innerHTML = '';
-    for (let i = 1; i <= 12; i++) {
-      const v = (amount / i).toFixed(2).replace('.', ',');
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = i + 'x de ' + currencySymbol() + ' ' + v + (i === 1 ? ' à vista' : ' sem juros');
-      sel.appendChild(opt);
-    }
-    if (prev) sel.value = prev;
-    const btn = document.getElementById('card-pay-btn');
-    if (btn) btn.textContent = 'Pagar · ' + currencySymbol() + ' ' + amount.toFixed(2).replace('.', ',');
   }
 
   // Máscaras dos campos
@@ -827,19 +809,17 @@
     ul.hidden = list.length === 0;
   }
 
-  const payBtn = document.getElementById('card-pay-btn');
-  if (payBtn) {
-    payBtn.addEventListener('click', function () {
-      const errors = validateMockForm();
-      if (errors.length) { showLocalErrors(errors); return; }
-      showLocalErrors([]);
-      const digits = onlyDigits(numEl && numEl.value);
-      payWithCard({
-        token: digits.slice(-4) === '0000' ? 'MOCK-REJECT' : 'MOCK-APPROVE',
-        installments: (document.getElementById('card-installments') || {}).value || 1,
-        payment_method_id: detectBrand(digits),
-        payer_cpf: (cpfEl && cpfEl.value) || ''
-      });
+  // Pagamento manual disparado pelo botão principal "Confirmar pedido".
+  function submitMockCard() {
+    const errors = validateMockForm();
+    if (errors.length) { showLocalErrors(errors); return; }
+    showLocalErrors([]);
+    const digits = onlyDigits(numEl && numEl.value);
+    payWithCard({
+      token: digits.slice(-4) === '0000' ? 'MOCK-REJECT' : 'MOCK-APPROVE',
+      installments: 1,
+      payment_method_id: detectBrand(digits),
+      payer_cpf: (cpfEl && cpfEl.value) || ''
     });
   }
 
@@ -950,9 +930,12 @@
     showCardState('error');
   }
 
-  // Evita submit por Enter quando cartão está selecionado (o Brick é quem paga).
+  // O cartão usa o mesmo botão "Confirmar pedido": intercepta o submit e paga.
+  // No Brick real o pagamento é disparado pelo próprio botão do Brick.
   form.addEventListener('submit', function (e) {
-    if (isCard()) e.preventDefault();
+    if (!isCard()) return;
+    e.preventDefault();
+    if (!brickMode()) submitMockCard();
   });
 
   form.querySelectorAll('input[name="payment_method"]').forEach(function (r) {
@@ -963,9 +946,7 @@
   const totalEl = document.getElementById('summary-total');
   if (totalEl && typeof MutationObserver !== 'undefined') {
     new MutationObserver(function () {
-      if (!isCard()) return;
-      if (PUBLIC_KEY && typeof window.MercadoPago !== 'undefined') mountBrick();
-      else populateInstallments();
+      if (isCard() && brickMode()) mountBrick();
     }).observe(totalEl, { childList: true, characterData: true, subtree: true });
   }
 

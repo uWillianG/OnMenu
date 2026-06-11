@@ -326,7 +326,8 @@ class CardPaymentTests(TestCase):
         self.assertContains(response, 'id="card-number"')
         self.assertContains(response, 'id="card-expiry"')
         self.assertContains(response, 'id="card-cvv"')
-        self.assertContains(response, 'id="card-installments"')
+        # Cartão é só à vista — sem seletor de parcelas.
+        self.assertNotContains(response, 'id="card-installments"')
         self.assertContains(response, 'sdk.mercadopago.com/js/v2')
         self.assertContains(response, 'Cartão de crédito')
 

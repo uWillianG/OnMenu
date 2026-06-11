@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=18">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=20">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
         🛒
         <span class="cart-btn-count">{{ cart_item_count }}</span>
         {% if cart_item_count > 0 %}
-          <span>{{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}</span>
+          <span id="cart-btn-total">{{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}</span>
         {% else %}
           <span>Carrinho</span>
         {% endif %}

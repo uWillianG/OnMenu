@@ -995,6 +995,8 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   display: grid;
   gap: 14px;
 }
+/* `display: grid` above would beat the UA [hidden] rule, so restore it. */
+.checkout-card[hidden] { display: none; }
 
 .checkout-card-head {
   display: flex;
@@ -1126,7 +1128,7 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
 .form-select:disabled { background-color: var(--surface-2); color: var(--muted); cursor: not-allowed; }
 
 /* checkout summary — shown first on mobile so totals are visible up front */
-.checkout-summary { display: block; order: -1; }
+.checkout-summary { display: block; order: 1; }
 
 .summary-items {
   display: grid;
@@ -1146,7 +1148,8 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
 .summary-line-name { flex: 1; min-width: 0; color: var(--text); }
 .summary-line-price { font-weight: 700; white-space: nowrap; }
 
-.checkout-submit { font-size: 1.05rem; }
+/* Botão fora do <form> (ligado via form=""): fica por último, abaixo do resumo. */
+.checkout-submit { font-size: 1.05rem; order: 2; }
 
 .errorlist {
   margin: 0; padding: 0;
@@ -1484,6 +1487,7 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   .cart-summary-panel  { position: sticky; top: calc(var(--header-h) + 18px); }
   .checkout-layout     { grid-template-columns: 1fr 330px; align-items: start; }
   .checkout-summary    { order: 0; position: sticky; top: calc(var(--header-h) + 18px); }
+  .checkout-submit     { grid-column: 1 / -1; }
   .staff-detail-layout { grid-template-columns: 1fr 290px; align-items: start; }
 }
 
