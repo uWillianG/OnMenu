@@ -12,12 +12,12 @@
       {% csrf_token %}
 
       <section class="checkout-card">
-        <div class="checkout-card-head"><span class="checkout-card-icon">🛵</span>Tipo de entrega</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>Tipo de entrega</div>
         <div class="select-tiles">
           {% for choice in form.fulfillment_method %}
             <label class="select-tile">
               {{ choice.tag }}
-              <span class="select-tile-emoji">{% if choice.data.value == 'pickup' %}🏪{% else %}🛵{% endif %}</span>
+              <span class="select-tile-emoji">{% if choice.data.value == 'pickup' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>{% endif %}</span>
               <span class="select-tile-text">{{ choice.choice_label }}</span>
               <span class="select-tile-check" aria-hidden="true"></span>
             </label>
@@ -27,7 +27,7 @@
       </section>
 
       <section class="checkout-card">
-        <div class="checkout-card-head"><span class="checkout-card-icon">👤</span>Seus dados</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>Seus dados</div>
 
         <div class="form-field">
           <label class="form-label" for="{{ form.customer_name.id_for_label }}">Nome completo</label>
@@ -53,7 +53,7 @@
       </section>
 
       <section class="checkout-card" id="address-section">
-        <div class="checkout-card-head"><span class="checkout-card-icon">📍</span>Endereço de entrega</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Endereço de entrega</div>
         <div class="address-grid">
 
           <div class="form-field">
@@ -89,7 +89,7 @@
       </section>
 
       <section class="checkout-card">
-        <div class="checkout-card-head"><span class="checkout-card-icon">📝</span>Observações</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>Observações</div>
         <div class="form-field">
           <textarea class="form-textarea" id="{{ form.notes.id_for_label }}" name="notes"
             placeholder="Alguma observação? Ex: sem cebola, troco para R$ 50…">{{ form.notes.value|default:'' }}</textarea>
@@ -97,12 +97,12 @@
       </section>
 
       <section class="checkout-card">
-        <div class="checkout-card-head"><span class="checkout-card-icon">💳</span>Forma de pagamento</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>Forma de pagamento</div>
         <div class="select-tiles">
           {% for choice in form.payment_method %}
             <label class="select-tile">
               {{ choice.tag }}
-              <span class="select-tile-emoji">{% if choice.data.value == 'pix' %}⚡{% elif choice.data.value == 'cash' %}💵{% else %}💳{% endif %}</span>
+              <span class="select-tile-emoji">{% if choice.data.value == 'pix' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>{% elif choice.data.value == 'cash' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><line x1="6" y1="12" x2="6.01" y2="12"/><line x1="18" y1="12" x2="18.01" y2="12"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>{% endif %}</span>
               <span class="select-tile-text">{{ choice.choice_label }}</span>
               <span class="select-tile-check" aria-hidden="true"></span>
             </label>
@@ -112,7 +112,7 @@
       </section>
 
       <section class="checkout-card" id="card-section" hidden>
-        <div class="checkout-card-head"><span class="checkout-card-icon">💳</span>Dados do cartão</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>Dados do cartão</div>
         <div id="card-brick-container"></div>
         <div id="card-mock-form" hidden>
           <div class="form-field">
@@ -188,7 +188,7 @@
       <button type="button" class="pix-modal-close" data-pix-close aria-label="Fechar">&times;</button>
 
       <div class="pix-modal-head">
-        <span class="checkout-card-icon">⚡</span>
+        <span class="checkout-card-icon ico-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
         <div>
           <div class="pix-modal-title" id="pix-modal-title">Pague com Pix</div>
           <div class="pix-modal-sub">Pedido <strong id="pix-order-number">—</strong></div>
@@ -245,7 +245,7 @@
       <button type="button" class="pix-modal-close" data-card-close aria-label="Fechar">&times;</button>
 
       <div class="pix-modal-head">
-        <span class="checkout-card-icon">💳</span>
+        <span class="checkout-card-icon ico-indigo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
         <div>
           <div class="pix-modal-title" id="card-modal-title">Pagar com cartão</div>
           <div class="pix-modal-sub">Total <strong>{{ currency_symbol }} <span id="card-total">0,00</span></strong></div>

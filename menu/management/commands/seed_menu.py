@@ -10,12 +10,12 @@ class Command(BaseCommand):
     help = 'Cria dados de exemplo para uma hamburgueria brasileira.'
 
     def handle(self, *args, **options):
-        Restaurant.objects.exclude(slug='fabrica-hamburgueria').update(is_active=False)
+        Restaurant.objects.exclude(slug='minha-hamburgueria').update(is_active=False)
 
         restaurant, _ = Restaurant.objects.update_or_create(
-            slug='fabrica-hamburgueria',
+            slug='minha-hamburgueria',
             defaults={
-                'name': 'Fábrica Hamburgueria',
+                'name': 'Minha Hamburgueria',
                 'phone': '(41) 99999-0000',
                 'whatsapp_number': '5541999990000',
                 'address': 'Rua das Flores, 42 — Portão, Curitiba/PR',

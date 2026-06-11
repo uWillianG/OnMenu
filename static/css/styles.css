@@ -185,6 +185,9 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   color: var(--muted);
 }
 
+.hero-chip svg { width: 15px; height: 15px; flex-shrink: 0; }
+.hero-chip svg.chip-dot { width: 10px; height: 10px; }
+
 .hero-chip.open   { background: #ecfdf3; border-color: #c7f0d9; color: #15803d; }
 .hero-chip.closed { background: var(--primary-soft); border-color: #f7d4d8; color: var(--primary-dark); }
 
@@ -284,7 +287,17 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
 
 /* ── Category accordion ─────────────────────────────────────── */
 .menu-section {
-  margin-bottom: 18px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0 18px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.menu-section[open] {
+  padding-bottom: 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .menu-section > summary {
@@ -1018,7 +1031,19 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   align-items: center;
   justify-content: center;
   font-size: 1.05rem;
+  color: var(--muted);
 }
+
+.checkout-card-icon svg { width: 18px; height: 18px; }
+
+/* colored section-header chips (icon tint + soft matching background) */
+.checkout-card-icon.ico-amber  { color: #d97706; background: #fef3e2; }
+.checkout-card-icon.ico-blue   { color: #2563eb; background: #e8f0fe; }
+.checkout-card-icon.ico-red    { color: #e11428; background: #fdecee; }
+.checkout-card-icon.ico-violet { color: #7c3aed; background: #f1ebfd; }
+.checkout-card-icon.ico-green  { color: #059669; background: #e6f6ef; }
+.checkout-card-icon.ico-indigo { color: #4f46e5; background: #ecebfd; }
+.checkout-card-icon.ico-teal   { color: #0d9488; background: #e0f5f2; }
 
 /* selectable tiles (fulfillment / payment) */
 .select-tiles { display: grid; gap: 10px; }
@@ -1036,7 +1061,8 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
 }
 
 .select-tile input { position: absolute; opacity: 0; pointer-events: none; }
-.select-tile-emoji { font-size: 1.3rem; line-height: 1; }
+.select-tile-emoji { display: flex; align-items: center; line-height: 1; color: var(--muted); }
+.select-tile-emoji svg { width: 22px; height: 22px; }
 .select-tile-text  { flex: 1; font-weight: 700; font-size: .95rem; }
 
 .select-tile-check {
