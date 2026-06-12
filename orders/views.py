@@ -8,6 +8,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -58,6 +59,7 @@ def checkout(request):
                 cart=cart,
                 cart_items=cart_items,
                 restaurant=restaurant,
+                user=request.user if request.user.is_authenticated else None,
             )
             cart.clear()
             # Pagamento Pix via modal: cria a cobrança e devolve o QR Code (JSON).
@@ -517,10 +519,85 @@ def staff_order_detail(request, order_number):
     )
 
 
+@login_required
+@require_http_methods(['POST'])
+def repeat_order(request, order_number):
+    """Recria o carrinho com os itens de um pedido anterior e leva ao checkout.
+
+    Só permite repetir pedidos da própria conta. Itens que saíram do cardápio
+    (ou ficaram indisponíveis) são omitidos com um aviso. As opções escolhidas
+    são remapeadas dos nomes salvos (snapshot) para as escolhas atuais do item.
+    """
+    order = get_object_or_404(
+        Order.objects.prefetch_related('items__options', 'items__menu_item'),
+        order_number=order_number,
+        user=request.user,
+    )
+
+    cart = Cart(request)
+    cart.clear()
+
+    added = 0
+    skipped = []
+    for order_item in order.items.all():
+        item = order_item.menu_item
+        if item is None or not item.is_available:
+            skipped.append(order_item.item_name)
+            continue
+        options = _rebuild_item_options(item, order_item)
+        cart.add(
+            item,
+            quantity=order_item.quantity,
+            options=options,
+            notes=order_item.notes,
+        )
+        added += 1
+
+    if added == 0:
+        messages.warning(
+            request,
+            'Não foi possível repetir o pedido: os itens não estão mais disponíveis.',
+        )
+        return redirect('accounts:profile')
+
+    if skipped:
+        messages.info(
+            request,
+            'Alguns itens não estão mais disponíveis e foram removidos: '
+            + ', '.join(skipped),
+        )
+
+    return redirect('orders:checkout')
+
+
+def _rebuild_item_options(item, order_item):
+    """Mapeia as opções salvas (nomes) de volta para os IDs das escolhas atuais.
+
+    Retorna um dict {group_id: choice_id | [choice_ids]} no formato esperado
+    pelo carrinho. Grupos/escolhas que não existem mais são ignorados.
+    """
+    groups = {g.name: g for g in item.option_groups.prefetch_related('choices').all()}
+    by_group = {}
+    for opt in order_item.options.all():
+        group = groups.get(opt.group_name)
+        if group is None:
+            continue
+        choice = next((c for c in group.choices.all() if c.name == opt.choice_name), None)
+        if choice is None:
+            continue
+        by_group.setdefault(str(group.id), []).append(str(choice.id))
+
+    return {
+        gid: (ids[0] if len(ids) == 1 else ids)
+        for gid, ids in by_group.items()
+    }
+
+
 @transaction.atomic
-def _create_order_from_cart(form, cart, cart_items, restaurant):
+def _create_order_from_cart(form, cart, cart_items, restaurant, user=None):
     order = form.save(commit=False)
     order.restaurant = restaurant
+    order.user = user
     order.subtotal = cart.subtotal
 
     city = form.cleaned_data.get('city')

@@ -12,6 +12,7 @@ urlpatterns = [
         name='confirmation',
     ),
     path('orders/track/<str:order_number>/', views.track_order, name='track_order'),
+    path('orders/<str:order_number>/repeat/', views.repeat_order, name='repeat_order'),
     path('orders/pix/<str:pix_id>/status/', views.pix_status, name='pix_status'),
     path('orders/pix/<str:order_number>/recreate/', views.pix_recreate, name='pix_recreate'),
     path('orders/card/<str:order_number>/pay/', views.card_pay, name='card_pay'),

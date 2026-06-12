@@ -21,6 +21,7 @@ class AuthFlowTests(TestCase):
             {
                 'username': 'cliente1',
                 'email': 'cliente1@example.com',
+                'phone': '(11) 99999-9999',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
                 'next': reverse('orders:checkout'),
@@ -38,6 +39,7 @@ class AuthFlowTests(TestCase):
             {
                 'username': 'cliente2',
                 'email': 'cliente2@example.com',
+                'phone': '(11) 99999-9999',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
                 'next': 'https://evil.example.com/phish',
@@ -67,6 +69,7 @@ class AuthFlowTests(TestCase):
             {
                 'username': 'cliente novo!',
                 'email': 'cliente_novo@example.com',
+                'phone': '(11) 99999-9999',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
             },
@@ -251,3 +254,70 @@ class AuthFlowTests(TestCase):
         self.client.login(username='cliente4', password='Sup3rSecret!9')
         html = self.client.get(reverse('cart:cart_detail')).content.decode()
         self.assertNotIn('data-auth-open', html)
+
+
+class PhoneAndProfileTests(TestCase):
+    def test_signup_requires_phone(self):
+        response = self.client.post(
+            reverse('accounts:signup'),
+            {
+                'username': 'sem_tel',
+                'email': 'sem_tel@example.com',
+                'password1': 'Sup3rSecret!9',
+                'password2': 'Sup3rSecret!9',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('phone', response.context['form'].errors)
+
+    def test_signup_saves_phone_to_profile(self):
+        self.client.post(
+            reverse('accounts:signup'),
+            {
+                'username': 'com_tel',
+                'email': 'com_tel@example.com',
+                'phone': '(11) 98888-7777',
+                'password1': 'Sup3rSecret!9',
+                'password2': 'Sup3rSecret!9',
+            },
+        )
+        user = User.objects.get(username='com_tel')
+        self.assertEqual(user.profile.phone, '(11) 98888-7777')
+
+    def test_profile_shows_phone_in_read_mode(self):
+        user = User.objects.create_user(
+            username='leitor', password='Sup3rSecret!9', email='leitor@example.com'
+        )
+        user.profile.phone = '(21) 3333-4444'
+        user.profile.save()
+        self.client.force_login(user)
+        html = self.client.get(reverse('accounts:profile')).content.decode()
+        self.assertIn('(21) 3333-4444', html)
+        # Nome/Sobrenome não devem mais existir no formulário
+        self.assertNotIn('>Nome<', html)
+        self.assertNotIn('>Sobrenome<', html)
+
+    def test_profile_updates_phone(self):
+        user = User.objects.create_user(
+            username='editor', password='Sup3rSecret!9', email='editor@example.com'
+        )
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('accounts:profile'),
+            {'username': 'editor', 'email': 'editor@example.com', 'phone': '(31) 2222-1111'},
+        )
+        self.assertRedirects(response, reverse('accounts:profile'))
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.phone, '(31) 2222-1111')
+
+    def test_profile_rejects_invalid_phone(self):
+        user = User.objects.create_user(
+            username='invalido', password='Sup3rSecret!9', email='invalido@example.com'
+        )
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('accounts:profile'),
+            {'username': 'invalido', 'email': 'invalido@example.com', 'phone': '123'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('phone', response.context['form'].errors)

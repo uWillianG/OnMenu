@@ -14,6 +14,28 @@
     });
   });
 
+  // ── Máscara de telefone BR: (XX) XXXXX-XXXX ──────────────────
+  function maskPhone(value) {
+    var d = value.replace(/\D/g, '').slice(0, 11);
+    if (!d) return '';
+    if (d.length < 2) return '(' + d;
+    var out = '(' + d.slice(0, 2) + ') ';
+    if (d.length <= 6) {
+      out += d.slice(2);
+    } else if (d.length <= 10) {
+      out += d.slice(2, 6) + '-' + d.slice(6);   // fixo: XXXX-XXXX
+    } else {
+      out += d.slice(2, 7) + '-' + d.slice(7);   // celular: XXXXX-XXXX
+    }
+    return out;
+  }
+
+  document.querySelectorAll('input[data-mask="phone"]').forEach(function (input) {
+    function apply() { input.value = maskPhone(input.value); }
+    input.addEventListener('input', apply);
+    apply();  // formata também valor pré-preenchido (ex.: tela de perfil)
+  });
+
   // ── Validação da senha em tempo real ─────────────────────────
   var pwd = document.getElementById('id_password1');
   var reqs = document.getElementById('password-reqs');

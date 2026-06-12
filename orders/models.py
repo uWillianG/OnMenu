@@ -1,6 +1,7 @@
 from decimal import Decimal
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -91,6 +92,16 @@ class Order(models.Model):
         Restaurant,
         on_delete=models.PROTECT,
         related_name='orders',
+    )
+    # Conta do cliente, quando o pedido é feito logado. Mantém o histórico de
+    # compras no perfil. Nulo para pedidos feitos sem login (SET_NULL preserva
+    # o histórico mesmo se a conta for removida).
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='orders',
+        null=True,
+        blank=True,
     )
     order_number = models.CharField(
         max_length=24,
