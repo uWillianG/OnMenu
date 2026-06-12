@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'accounts',
     'menu',
     'cart',
     'orders',
@@ -94,12 +95,22 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 8},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'accounts.validators.UppercaseValidator',
+    },
+    {
+        'NAME': 'accounts.validators.LowercaseValidator',
+    },
+    {
+        'NAME': 'accounts.validators.NumberValidator',
+    },
+    {
+        'NAME': 'accounts.validators.SpecialCharacterValidator',
     },
 ]
 
@@ -107,7 +118,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pt-br'
 
 TIME_ZONE = 'America/Sao_Paulo'
 
@@ -126,8 +137,18 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 CART_SESSION_ID = 'onmenu_cart'
 CURRENCY_SYMBOL = 'R$'
+LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'orders:staff_order_list'
 LOGOUT_REDIRECT_URL = 'menu:menu_list'
+
+# E-mail: sem SMTP configurado, os e-mails (ex.: recuperação de senha) são
+# impressos no console do runserver — análogo ao modo "mock" dos pagamentos.
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+)
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL', 'OnMenu <nao-responder@onmenu.com.br>'
+)
 
 # --- Mercado Pago / Pix ---
 # Access token da conta Mercado Pago. Sem token, o sistema roda em modo "mock"

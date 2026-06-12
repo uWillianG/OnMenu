@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Entrar | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content auth-page">
+  <div class="auth-card checkout-card">
+    <div class="checkout-card-head">
+      <span class="checkout-card-icon ico-red">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      </span>
+      Entrar na sua conta
+    </div>
+
+    <p class="auth-sub">Acesse para acompanhar seus pedidos com mais facilidade.</p>
+
+    <form method="post" class="auth-form" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+
+      {% if form.non_field_errors %}
+        <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% for field in form %}
+        {% include 'registration/_auth_field.html' %}
+      {% endfor %}
+
+      <p class="auth-forgot">
+        <a href="{% url 'accounts:password_reset' %}">Esqueceu a senha?</a>
+      </p>
+
+      <button type="submit" class="btn-primary">Entrar</button>
+    </form>
+
+    <p class="auth-alt">
+      Ainda não tem conta?
+      <a href="{% url 'accounts:signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Criar conta</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=1"></script>
+{% endblock %}

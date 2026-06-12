@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Criar conta | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content auth-page">
+  <div class="auth-card checkout-card">
+    <div class="checkout-card-head">
+      <span class="checkout-card-icon ico-red">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      </span>
+      Criar sua conta
+    </div>
+
+    <p class="auth-sub">Leva menos de um minuto e agiliza seus próximos pedidos.</p>
+
+    <form method="post" class="auth-form" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+
+      {% if form.non_field_errors %}
+        <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+      {% endif %}
+
+      {% for field in form %}
+        {% include 'registration/_auth_field.html' %}
+      {% endfor %}
+
+      <button type="submit" class="btn-primary">Criar conta</button>
+    </form>
+
+    <p class="auth-alt">
+      Já tem conta?
+      <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Entrar</a>
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}?v=1"></script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% comment %}Renderiza um campo do formulário de auth. Campos de senha ganham
+botão de exibir/ocultar; o campo password1 ganha o checklist de requisitos.{% endcomment %}
+<div class="form-field">
+  <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+
+  {% if field.field.widget.input_type == 'password' %}
+    <div class="password-field">
+      {{ field }}
+      <button type="button" class="password-toggle" data-toggle-for="{{ field.id_for_label }}"
+              aria-label="Mostrar senha" aria-pressed="false">
+        <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
+
+    {% if field.name == 'password1' %}
+      <ul class="password-reqs" id="password-reqs" aria-live="polite">
+        <li data-req="length">Mínimo de 8 caracteres</li>
+        <li data-req="upper">Uma letra maiúscula</li>
+        <li data-req="lower">Uma letra minúscula</li>
+        <li data-req="number">Um número</li>
+        <li data-req="special">Um caractere especial</li>
+      </ul>
+    {% elif field.help_text %}
+      <small class="auth-help">{{ field.help_text|safe }}</small>
+    {% endif %}
+  {% else %}
+    {{ field }}
+    {% if field.help_text %}<small class="auth-help">{{ field.help_text|safe }}</small>{% endif %}
+  {% endif %}
+
+  {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+</div>

@@ -36,14 +36,14 @@ class CartViewsTests(TestCase):
         )
         response = self.client.get(reverse('cart:cart_detail'))
         self.assertContains(response, 'Burger')
-        self.assertContains(response, '40.00')
+        self.assertContains(response, '40,00')
 
         self.client.post(
             reverse('cart:cart_update', args=[self.item.pk]),
             {'quantity': 3},
         )
         response = self.client.get(reverse('cart:cart_detail'))
-        self.assertContains(response, '60.00')
+        self.assertContains(response, '60,00')
 
         self.client.post(reverse('cart:cart_remove', args=[self.item.pk]))
         response = self.client.get(reverse('cart:cart_detail'))

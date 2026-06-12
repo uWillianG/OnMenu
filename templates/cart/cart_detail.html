@@ -68,11 +68,33 @@
         </div>
         <p class="summary-note">Taxa de entrega calculada na finalização.</p>
         <div class="summary-actions">
-          <a class="btn-primary" href="{% url 'orders:checkout' %}">Finalizar pedido</a>
+          {% if request.user.is_authenticated %}
+            <a class="btn-primary" href="{% url 'orders:checkout' %}">Finalizar pedido</a>
+          {% else %}
+            <button type="button" class="btn-primary" data-auth-open>Finalizar pedido</button>
+          {% endif %}
           <a class="btn-secondary" href="{% url 'menu:menu_list' %}">Continuar comprando</a>
         </div>
       </aside>
     </div>
+
+    {% if not request.user.is_authenticated %}
+      <div id="auth-modal" class="modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <div class="modal-card auth-choice-card" role="document">
+          <button type="button" class="modal-close" data-auth-close aria-label="Fechar">&times;</button>
+          <div class="modal-body">
+            <div class="auth-choice-head">
+              <h2 class="auth-choice-title" id="auth-modal-title">Como deseja continuar?</h2>
+              <p class="auth-choice-sub">Entre na sua conta para acompanhar seus pedidos, ou siga direto para o checkout.</p>
+            </div>
+            <div class="auth-choice-actions">
+              <a class="btn-primary" href="{% url 'accounts:login' %}?next={% url 'orders:checkout' %}">Entrar ou criar conta</a>
+              <a class="btn-secondary" href="{% url 'orders:checkout' %}">Continuar sem login</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
 
   {% else %}
     <div class="empty-state">
@@ -83,4 +105,32 @@
     </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not request.user.is_authenticated %}
+<script>
+(function () {
+  var modal = document.getElementById('auth-modal');
+  if (!modal) return;
+  var openers = document.querySelectorAll('[data-auth-open]');
+
+  function open() {
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  function close() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  openers.forEach(function (btn) { btn.addEventListener('click', open); });
+  modal.querySelectorAll('[data-auth-close]').forEach(function (el) { el.addEventListener('click', close); });
+  modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) close();
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
