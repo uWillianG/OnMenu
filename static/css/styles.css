@@ -1263,6 +1263,27 @@ body.no-scroll { overflow: hidden; }
   .address-grid .span-2 { grid-column: auto; }
 }
 
+/* salvar endereço no perfil (checkout) — botão no canto do cabeçalho */
+.address-save-head {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.address-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.address-save-btn svg { width: 17px; height: 17px; }
+.address-save-msg { font-size: .82rem; font-weight: 600; text-align: right; }
+.address-save-msg.is-ok { color: var(--success); }
+.address-save-msg.is-error { color: var(--primary); }
+
 .form-input,
 .form-textarea,
 .form-select {
@@ -1543,6 +1564,62 @@ body.no-scroll { overflow: hidden; }
 /* ── Staff pages ────────────────────────────────────────────── */
 .staff-page { display: grid; gap: 20px; }
 
+.staff-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.btn-print-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  font-size: .88rem;
+}
+.btn-print-all svg { width: 17px; height: 17px; }
+
+.order-section { display: grid; gap: 12px; }
+
+.order-section-head { display: flex; align-items: center; gap: 10px; }
+
+.order-section-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.card-print-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  transition: color .15s, border-color .15s;
+}
+.card-print-btn:hover { color: var(--primary); border-color: var(--primary); }
+.card-print-btn svg { width: 18px; height: 18px; }
+
+.redirect-note { font-size: .85rem; color: var(--muted); font-weight: 600; text-align: center; margin-top: 2px; }
+
 .split-heading {
   display: flex;
   align-items: center;
@@ -1622,9 +1699,21 @@ body.no-scroll { overflow: hidden; }
   gap: 12px;
 }
 
-.detail-card-title { font-weight: 800; font-size: 1.05rem; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.detail-meta { font-size: .9rem; color: var(--muted); }
+.detail-card-title {
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-meta { font-size: .9rem; color: var(--muted); display: flex; align-items: flex-start; gap: 7px; }
 .detail-meta strong { color: var(--text); }
+
+.title-ico { width: 18px; height: 18px; color: var(--primary); flex: none; }
+.meta-ico { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--muted); }
+.h1-ico { width: 24px; height: 24px; color: var(--primary); flex: none; vertical-align: -4px; margin-right: 8px; }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (min-width: 600px) {

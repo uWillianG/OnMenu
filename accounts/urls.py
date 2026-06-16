@@ -11,6 +11,7 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('signup/', views.signup, name='signup'),
     path('perfil/', views.profile, name='profile'),
+    path('perfil/salvar-endereco/', views.save_address, name='save_address'),
 
     # Recuperação de senha (esqueci a senha)
     path(

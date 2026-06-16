@@ -2,8 +2,10 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.http import JsonResponse
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from orders.models import City, Order
 
@@ -85,6 +87,23 @@ def profile(request):
             'delivery_areas': _delivery_areas_data(),
         },
     )
+
+
+@login_required
+@require_POST
+def save_address(request):
+    """Salva no perfil o endereço digitado no checkout (via AJAX).
+
+    Reaproveita os mesmos nomes de campo do CheckoutForm (city, neighborhood,
+    address_street, address_number, address_complement), então o JS do checkout
+    pode enviar a própria seção de endereço sem montar um payload separado.
+    """
+    profile_obj, _ = Profile.objects.get_or_create(user=request.user)
+    form = AddressForm(request.POST, instance=profile_obj)
+    if form.is_valid():
+        form.save()
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
 
 
 def _delivery_areas_data():

@@ -406,6 +406,48 @@ class AddressTests(TestCase):
         self.assertIn('(11) 91234-5678', html)
         self.assertIn('Av. Brasil', html)
 
+    def test_save_address_endpoint_persists_to_profile(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('accounts:save_address'),
+            {
+                'city': self.city.id,
+                'neighborhood': self.nb.id,
+                'address_street': 'Rua Nova',
+                'address_number': '42',
+                'address_complement': '',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['ok'])
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.address_street, 'Rua Nova')
+        self.assertEqual(self.user.profile.neighborhood_id, self.nb.id)
+
+    def test_save_address_endpoint_requires_login(self):
+        response = self.client.post(reverse('accounts:save_address'), {})
+        self.assertEqual(response.status_code, 302)
+
+    def test_save_address_endpoint_returns_errors(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('accounts:save_address'),
+            {'city': self.city.id, 'neighborhood': self.other_nb.id},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('neighborhood', response.json()['errors'])
+
+    def test_checkout_shows_save_address_button_only_when_logged_in(self):
+        self._add_item_to_cart()
+        html = self.client.get(reverse('orders:checkout')).content.decode()
+        self.assertNotIn('id="save-address-btn"', html)
+
+        self.client.force_login(self.user)
+        html = self.client.get(reverse('orders:checkout')).content.decode()
+        self.assertIn('id="save-address-btn"', html)
+
     def _add_item_to_cart(self):
         """Coloca um item disponível no carrinho para liberar o checkout."""
         from menu.models import Category, MenuItem, Restaurant

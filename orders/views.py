@@ -505,13 +505,57 @@ def staff_order_list(request):
     else:
         status_filter = ''
 
+    # Separa pedidos em andamento (ativos) dos finalizados (entregues/cancelados),
+    # avaliando em Python para não fazer duas queries adicionais.
+    order_list = list(orders)
+    active_orders = [o for o in order_list if o.is_active]
+    inactive_orders = [o for o in order_list if not o.is_active]
+
     return render(
         request,
         'orders/staff_order_list.html',
         {
-            'orders': orders,
+            'active_orders': active_orders,
+            'inactive_orders': inactive_orders,
+            'active_count': len(active_orders),
+            'inactive_count': len(inactive_orders),
             'status_filter': status_filter,
             'status_choices': Order.Status.choices,
+        },
+    )
+
+
+def _orders_for_print(queryset):
+    return queryset.select_related('restaurant').prefetch_related('items__options')
+
+
+@staff_member_required
+def staff_order_print(request, order_number):
+    """Página de impressão (comanda) de um único pedido."""
+    order = get_object_or_404(
+        _orders_for_print(Order.objects.all()),
+        order_number=order_number,
+    )
+    return render(
+        request,
+        'orders/print_orders.html',
+        {'orders': [order], 'auto_print': True, 'scope_label': 'Pedido'},
+    )
+
+
+@staff_member_required
+def staff_orders_print_active(request):
+    """Página de impressão de todos os pedidos ativos (em andamento)."""
+    orders = _orders_for_print(
+        Order.objects.filter(status__in=Order.ACTIVE_STATUSES)
+    )
+    return render(
+        request,
+        'orders/print_orders.html',
+        {
+            'orders': list(orders),
+            'auto_print': True,
+            'scope_label': 'Pedidos ativos',
         },
     )
 
@@ -528,8 +572,9 @@ def staff_order_detail(request, order_number):
         form = OrderStatusForm(request.POST, instance=order)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Order {order.order_number} status updated.')
-            return redirect('orders:staff_order_detail', order_number=order.order_number)
+            messages.success(request, f'Status do pedido {order.order_number} atualizado.')
+            url = reverse('orders:staff_order_detail', args=[order.order_number])
+            return redirect(f'{url}?updated=1')
     else:
         form = OrderStatusForm(instance=order)
 

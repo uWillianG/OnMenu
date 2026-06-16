@@ -75,11 +75,11 @@ class Order(models.Model):
         PIX = 'pix', 'PIX'
 
     class Status(models.TextChoices):
-        RECEIVED = 'received', 'Received'
-        PREPARING = 'preparing', 'Preparing'
-        OUT_FOR_DELIVERY = 'out_for_delivery', 'Out for delivery'
-        DELIVERED = 'delivered', 'Delivered'
-        CANCELLED = 'cancelled', 'Cancelled'
+        RECEIVED = 'received', 'Recebido'
+        PREPARING = 'preparing', 'Em preparo'
+        OUT_FOR_DELIVERY = 'out_for_delivery', 'Saiu para entrega'
+        DELIVERED = 'delivered', 'Entregue'
+        CANCELLED = 'cancelled', 'Cancelado'
 
     class PaymentStatus(models.TextChoices):
         PENDING = 'pending', 'Pendente'
@@ -87,6 +87,14 @@ class Order(models.Model):
         PAID = 'paid', 'Pago'
         REJECTED = 'rejected', 'Recusado'
         CANCELLED = 'cancelled', 'Cancelado'
+
+    # Pedidos "ativos" ainda estão em andamento (na fila da cozinha/entrega);
+    # os demais (entregue/cancelado) são considerados finalizados/inativos.
+    ACTIVE_STATUSES = (
+        Status.RECEIVED,
+        Status.PREPARING,
+        Status.OUT_FOR_DELIVERY,
+    )
 
     restaurant = models.ForeignKey(
         Restaurant,
@@ -171,6 +179,11 @@ class Order(models.Model):
             line1 = f'{line1} ({self.address_complement})' if line1 else self.address_complement
         line2 = ' - '.join(p for p in [self.address_neighborhood, self.address_city] if p)
         return '\n'.join(line for line in [line1, line2] if line)
+
+    @property
+    def is_active(self):
+        """Pedido ainda em andamento (não entregue nem cancelado)."""
+        return self.status in self.ACTIVE_STATUSES
 
     @property
     def has_structured_address(self):

@@ -53,7 +53,15 @@
       </section>
 
       <section class="checkout-card" id="address-section">
-        <div class="checkout-card-head"><span class="checkout-card-icon ico-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Endereço de entrega</div>
+        <div class="checkout-card-head"><span class="checkout-card-icon ico-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Endereço de entrega{% if user.is_authenticated %}
+          <span class="address-save-head">
+            <span class="address-save-msg" id="save-address-msg" aria-live="polite"></span>
+            <button type="button" class="btn-secondary address-save-btn" id="save-address-btn"
+                    data-url="{% url 'accounts:save_address' %}"
+                    aria-label="Salvar endereço no meu perfil" title="Salvar endereço no meu perfil">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </button>
+          </span>{% endif %}</div>
         <div class="address-grid">
 
           <div class="form-field">
@@ -368,6 +376,59 @@
   if (nbSel) nbSel.addEventListener('change', update);
   radios.forEach(function (r) { r.addEventListener('change', update); });
   update();
+})();
+</script>
+
+<script>
+// Salvar o endereço digitado no perfil do cliente logado (AJAX).
+(function () {
+  var btn = document.getElementById('save-address-btn');
+  var msg = document.getElementById('save-address-msg');
+  var form = document.querySelector('.checkout-form');
+  if (!btn || !form) return;
+
+  var csrf = (form.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+  var FIELDS = ['city', 'neighborhood', 'address_street', 'address_number', 'address_complement'];
+
+  function show(text, ok) {
+    if (!msg) return;
+    msg.textContent = text;
+    msg.classList.toggle('is-ok', !!ok);
+    msg.classList.toggle('is-error', !ok);
+  }
+
+  btn.addEventListener('click', function () {
+    var body = new URLSearchParams();
+    FIELDS.forEach(function (name) {
+      var el = form.querySelector('[name="' + name + '"]');
+      body.append(name, el ? el.value : '');
+    });
+
+    btn.disabled = true;
+    show('Salvando…', true);
+
+    fetch(btn.dataset.url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body.toString(),
+    })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (res.ok && res.data.ok) {
+          show('Endereço salvo no seu perfil.', true);
+        } else {
+          var errs = res.data.errors || {};
+          var first = Object.keys(errs)[0];
+          show(first ? errs[first][0] : 'Não foi possível salvar o endereço.', false);
+        }
+      })
+      .catch(function () { show('Erro de conexão. Tente novamente.', false); })
+      .finally(function () { btn.disabled = false; });
+  });
 })();
 </script>
 

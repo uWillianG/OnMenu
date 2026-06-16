@@ -1,0 +1,19 @@
+{% comment %}Card de pedido reutilizado nas seções do painel staff. Espera `order`.{% endcomment %}
+<article class="order-card">
+  <div class="order-card-info">
+    <h2><a href="{% url 'orders:staff_order_detail' order.order_number %}">{{ order.order_number }}</a></h2>
+    <p class="order-card-meta">
+      {{ order.customer_name }} &nbsp;·&nbsp;
+      {{ order.get_fulfillment_method_display }} &nbsp;·&nbsp;
+      {{ order.created_at|date:"d/m H:i" }}
+    </p>
+  </div>
+  <div class="order-card-right">
+    <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
+    <span class="order-total">{{ currency_symbol }} {{ order.total|floatformat:2 }}</span>
+    <a class="card-print-btn" href="{% url 'orders:staff_order_print' order.order_number %}"
+       target="_blank" rel="noopener" title="Imprimir pedido" aria-label="Imprimir pedido {{ order.order_number }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+    </a>
+  </div>
+</article>

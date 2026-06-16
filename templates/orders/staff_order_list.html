@@ -7,41 +7,56 @@
   <div class="staff-page">
 
     <div class="split-heading">
-      <h1 class="page-h1">📋 Pedidos</h1>
-      <form class="filter-form" method="get">
-        <select class="filter-select" name="status">
-          <option value="">Todos os status</option>
-          {% for value, label in status_choices %}
-            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        <button class="btn-secondary" type="submit" style="padding:8px 14px;font-size:.88rem">Filtrar</button>
-      </form>
+      <h1 class="page-h1"><svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>Pedidos</h1>
+      <div class="staff-toolbar">
+        <a class="btn-primary btn-print-all" href="{% url 'orders:staff_orders_print_active' %}"
+           target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir ativos
+        </a>
+        <form class="filter-form" method="get">
+          <select class="filter-select" name="status">
+            <option value="">Todos os status</option>
+            {% for value, label in status_choices %}
+              <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn-secondary" type="submit" style="padding:8px 14px;font-size:.88rem">Filtrar</button>
+        </form>
+      </div>
     </div>
 
-    <div class="order-cards">
-      {% for order in orders %}
-        <article class="order-card">
-          <div class="order-card-info">
-            <h2><a href="{% url 'orders:staff_order_detail' order.order_number %}">{{ order.order_number }}</a></h2>
-            <p class="order-card-meta">
-              {{ order.customer_name }} &nbsp;·&nbsp;
-              {{ order.get_fulfillment_method_display }} &nbsp;·&nbsp;
-              {{ order.created_at|date:"d/m H:i" }}
-            </p>
+    <section class="order-section">
+      <div class="order-section-head">
+        <h2 class="order-section-title">Ativos <span class="order-section-count">{{ active_count }}</span></h2>
+      </div>
+      <div class="order-cards">
+        {% for order in active_orders %}
+          {% include 'orders/_staff_order_card.html' %}
+        {% empty %}
+          <div class="empty-state">
+            <h2>Nenhum pedido ativo</h2>
+            <p>Os novos pedidos aparecem aqui assim que chegam.</p>
           </div>
-          <div class="order-card-right">
-            <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
-            <span class="order-total">{{ currency_symbol }} {{ order.total|floatformat:2 }}</span>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="order-section">
+      <div class="order-section-head">
+        <h2 class="order-section-title">Finalizados <span class="order-section-count">{{ inactive_count }}</span></h2>
+      </div>
+      <div class="order-cards">
+        {% for order in inactive_orders %}
+          {% include 'orders/_staff_order_card.html' %}
+        {% empty %}
+          <div class="empty-state">
+            <h2>Nenhum pedido finalizado</h2>
+            <p>Pedidos entregues ou cancelados aparecem aqui.</p>
           </div>
-        </article>
-      {% empty %}
-        <div class="empty-state">
-          <h2>Nenhum pedido encontrado</h2>
-          <p>Tente outro filtro ou aguarde novos pedidos.</p>
-        </div>
-      {% endfor %}
-    </div>
+        {% endfor %}
+      </div>
+    </section>
 
   </div>
 </div>

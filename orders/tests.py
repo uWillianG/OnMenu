@@ -164,7 +164,7 @@ class OrderViewsTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse('orders:staff_order_detail', args=[order.order_number]),
+            reverse('orders:staff_order_detail', args=[order.order_number]) + '?updated=1',
         )
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PREPARING)
