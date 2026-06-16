@@ -5,9 +5,9 @@ from django.contrib.auth.views import LoginView
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from orders.models import Order
+from orders.models import City, Order
 
-from .forms import LoginForm, ProfileForm, SignupForm
+from .forms import AddressForm, LoginForm, ProfileForm, SignupForm
 from .models import Profile
 
 
@@ -47,17 +47,26 @@ def signup(request):
 
 @login_required
 def profile(request):
-    """Perfil do cliente: dados da conta (editáveis) + histórico de compras."""
-    Profile.objects.get_or_create(user=request.user)
+    """Perfil do cliente: dados da conta + endereço (editáveis) + histórico."""
+    profile_obj, _ = Profile.objects.get_or_create(user=request.user)
+
+    form = ProfileForm(instance=request.user)
+    address_form = AddressForm(instance=profile_obj)
 
     if request.method == 'POST':
-        form = ProfileForm(request.POST, instance=request.user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Dados atualizados com sucesso.')
-            return redirect('accounts:profile')
-    else:
-        form = ProfileForm(instance=request.user)
+        # Distingue qual seção foi enviada (dados da conta x endereço).
+        if request.POST.get('form_kind') == 'address':
+            address_form = AddressForm(request.POST, instance=profile_obj)
+            if address_form.is_valid():
+                address_form.save()
+                messages.success(request, 'Endereço atualizado com sucesso.')
+                return redirect('accounts:profile')
+        else:
+            form = ProfileForm(request.POST, instance=request.user)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Dados atualizados com sucesso.')
+                return redirect('accounts:profile')
 
     orders = (
         Order.objects
@@ -69,8 +78,29 @@ def profile(request):
     return render(
         request,
         'registration/profile.html',
-        {'form': form, 'orders': orders},
+        {
+            'form': form,
+            'address_form': address_form,
+            'orders': orders,
+            'delivery_areas': _delivery_areas_data(),
+        },
     )
+
+
+def _delivery_areas_data():
+    """Cidades/bairros ativos (id, nome) para o seletor dependente do perfil."""
+    cities = City.objects.filter(is_active=True).prefetch_related('neighborhoods')
+    return {
+        str(city.id): {
+            'name': city.name,
+            'neighborhoods': [
+                {'id': n.id, 'name': n.name}
+                for n in city.neighborhoods.all()
+                if n.is_active
+            ],
+        }
+        for city in cities
+    }
 
 
 def _safe_next(request, next_url):

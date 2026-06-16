@@ -294,6 +294,13 @@
     updateTotal();
   }
 
+  // Ícones SVG centralizam melhor que os glifos "+"/"✓" dentro do círculo.
+  const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  function setToggleIcon(el, checked) {
+    el.innerHTML = checked ? ICON_CHECK : ICON_PLUS;
+  }
+
   function buildGroup(groupEl) {
     const choices   = groupEl.querySelectorAll('[data-cid]');
     if (!choices.length) return null;
@@ -334,14 +341,14 @@
       price.textContent = extra > 0 ? '+' + fmt(extra) : 'Incluso';
       const toggle = document.createElement('span');
       toggle.className = 'modal-choice-toggle';
-      toggle.textContent = (inputType === 'radio' && i === 0) ? '\u2713' : '+';
+      setToggleIcon(toggle, inputType === 'radio' && i === 0);
       label.append(input, lbl, price, toggle);
       if (inputType === 'checkbox') {
         label.addEventListener('click', (e) => {
           e.preventDefault();
           input.checked = !input.checked;
           label.classList.toggle('selected', input.checked);
-          toggle.textContent = input.checked ? '\u2713' : '+';
+          setToggleIcon(toggle, input.checked);
           updateTotal();
         });
       } else {
@@ -349,7 +356,7 @@
           wrap.querySelectorAll('.modal-choice-item').forEach(l => {
             const tog = l.querySelector('.modal-choice-toggle');
             const inp = l.querySelector('input');
-            if (tog) tog.textContent = (inp && inp.checked) ? '\u2713' : '+';
+            if (tog) setToggleIcon(tog, inp && inp.checked);
           });
           updateTotal();
         });

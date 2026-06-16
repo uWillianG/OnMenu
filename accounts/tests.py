@@ -321,3 +321,101 @@ class PhoneAndProfileTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn('phone', response.context['form'].errors)
+
+
+class AddressTests(TestCase):
+    def setUp(self):
+        from orders.models import City, Neighborhood
+
+        self.city = City.objects.create(name='São Paulo', delivery_fee='5.00')
+        self.other_city = City.objects.create(name='Guarulhos', delivery_fee='8.00')
+        self.nb = Neighborhood.objects.create(
+            city=self.city, name='Centro', delivery_fee='2.00'
+        )
+        self.other_nb = Neighborhood.objects.create(
+            city=self.other_city, name='Bonsucesso', delivery_fee='3.00'
+        )
+        self.user = User.objects.create_user(
+            username='morador', password='Sup3rSecret!9', email='morador@example.com'
+        )
+
+    def test_profile_saves_address(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('accounts:profile'),
+            {
+                'form_kind': 'address',
+                'city': self.city.id,
+                'neighborhood': self.nb.id,
+                'address_street': 'Rua das Flores',
+                'address_number': '100',
+                'address_complement': 'Ap 12',
+            },
+        )
+        self.assertRedirects(response, reverse('accounts:profile'))
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.address_street, 'Rua das Flores')
+        self.assertEqual(self.user.profile.address_number, '100')
+        self.assertEqual(self.user.profile.city_id, self.city.id)
+        self.assertEqual(self.user.profile.neighborhood_id, self.nb.id)
+
+    def test_profile_rejects_neighborhood_from_other_city(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('accounts:profile'),
+            {
+                'form_kind': 'address',
+                'city': self.city.id,
+                'neighborhood': self.other_nb.id,
+                'address_street': 'Rua X',
+                'address_number': '1',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('neighborhood', response.context['address_form'].errors)
+
+    def test_profile_shows_saved_address_in_read_mode(self):
+        p = self.user.profile
+        p.address_street = 'Av. Brasil'
+        p.address_number = '500'
+        p.city = self.city
+        p.neighborhood = self.nb
+        p.save()
+        self.client.force_login(self.user)
+        html = self.client.get(reverse('accounts:profile')).content.decode()
+        self.assertIn('Av. Brasil', html)
+        self.assertIn('Centro', html)
+        self.assertIn('São Paulo', html)
+
+    def test_checkout_prefills_from_profile(self):
+        self.user.first_name = 'Maria'
+        self.user.last_name = 'Souza'
+        self.user.save()
+        p = self.user.profile
+        p.phone = '(11) 91234-5678'
+        p.address_street = 'Av. Brasil'
+        p.address_number = '500'
+        p.city = self.city
+        p.neighborhood = self.nb
+        p.save()
+        self.client.force_login(self.user)
+
+        self._add_item_to_cart()
+        html = self.client.get(reverse('orders:checkout')).content.decode()
+        self.assertIn('Maria Souza', html)
+        self.assertIn('(11) 91234-5678', html)
+        self.assertIn('Av. Brasil', html)
+
+    def _add_item_to_cart(self):
+        """Coloca um item disponível no carrinho para liberar o checkout."""
+        from menu.models import Category, MenuItem, Restaurant
+
+        restaurant = Restaurant.objects.create(name='Resto', is_active=True)
+        category = Category.objects.create(restaurant=restaurant, name='Cat')
+        item = MenuItem.objects.create(
+            category=category, name='Lanche', price='20.00', is_available=True
+        )
+        self.client.post(
+            reverse('cart:cart_add', args=[item.id]),
+            {'quantity': 1},
+        )

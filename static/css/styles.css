@@ -282,6 +282,12 @@ body.no-scroll { overflow: hidden; }
   padding: 13px 16px;
   font-weight: 600;
   font-size: .9rem;
+  transition: opacity .3s ease, transform .3s ease;
+}
+
+.message.is-hiding {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .message-warning, .message-error { border-left-color: var(--warning); }
@@ -605,6 +611,7 @@ body.no-scroll { overflow: hidden; }
   box-shadow: var(--shadow-warm);
   transition: transform .15s, filter .15s;
 }
+.card-add-icon svg { width: 18px; height: 18px; display: block; }
 
 .product-card[data-open-modal]:hover .card-add-icon { transform: scale(1.08) rotate(90deg); }
 
@@ -767,6 +774,7 @@ body.no-scroll { overflow: hidden; }
   flex-shrink: 0;
   transition: background .15s, border-color .15s, color .15s, transform .15s;
 }
+.modal-choice-toggle svg { width: 15px; height: 15px; display: block; }
 
 .modal-choice-item.selected .modal-choice-toggle,
 .modal-choice-item:has(input[type="radio"]:checked) .modal-choice-toggle {
@@ -1934,6 +1942,8 @@ body.no-scroll { overflow: hidden; }
 
 .profile-layout { display: grid; gap: 20px; align-items: start; }
 
+.profile-aside { display: grid; gap: 20px; align-self: start; }
+
 .profile-account { align-self: start; }
 .profile-account .checkout-card-head { justify-content: flex-start; }
 
@@ -2097,7 +2107,7 @@ body.no-scroll { overflow: hidden; }
 
 @media (min-width: 900px) {
   .profile-layout { grid-template-columns: 380px 1fr; }
-  .profile-account { position: sticky; top: calc(var(--header-h) + 18px); }
+  .profile-aside { position: sticky; top: calc(var(--header-h) + 18px); }
 }
 
 /* Modal de escolha (entrar x seguir sem login) no carrinho */

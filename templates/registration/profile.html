@@ -13,6 +13,8 @@
 
   <div class="profile-layout">
 
+    <div class="profile-aside">
+
     {# ── Dados da conta ─────────────────────────────────────────── #}
     <section class="checkout-card profile-account{% if form.errors %} is-editing{% endif %}" id="account-card">
       <div class="checkout-card-head">
@@ -60,6 +62,86 @@
         </div>
       </form>
     </section>
+
+    {# ── Endereço ───────────────────────────────────────────────── #}
+    <section class="checkout-card profile-account{% if address_form.errors %} is-editing{% endif %}" id="address-card">
+      <div class="checkout-card-head">
+        <span class="checkout-card-icon ico-red">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </span>
+        Meu endereço
+        <button type="button" class="profile-edit-toggle" id="address-edit-btn"
+                aria-label="Editar endereço" title="Editar endereço">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>
+
+      {% with p=request.user.profile %}
+      {# Modo leitura #}
+      <dl class="profile-view">
+        <div class="profile-field-row">
+          <dt>Endereço</dt>
+          <dd>
+            {% if p.address_street %}
+              {{ p.address_street }}{% if p.address_number %}, {{ p.address_number }}{% endif %}{% if p.address_complement %} — {{ p.address_complement }}{% endif %}
+            {% else %}—{% endif %}
+          </dd>
+        </div>
+        <div class="profile-field-row">
+          <dt>Bairro</dt>
+          <dd>{{ p.neighborhood.name|default:"—" }}</dd>
+        </div>
+        <div class="profile-field-row">
+          <dt>Cidade</dt>
+          <dd>{{ p.city.name|default:"—" }}</dd>
+        </div>
+      </dl>
+      {% endwith %}
+
+      {# Modo edição #}
+      <form method="post" class="auth-form profile-edit" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="form_kind" value="address">
+
+        {% if address_form.non_field_errors %}
+          <ul class="errorlist">{% for e in address_form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <div class="address-grid">
+          <div class="form-field">
+            <label class="form-label" for="id_addr_city">Cidade</label>
+            {{ address_form.city }}
+            {% if address_form.city.errors %}<ul class="errorlist">{% for e in address_form.city.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="id_addr_neighborhood">Bairro</label>
+            {{ address_form.neighborhood }}
+            {% if address_form.neighborhood.errors %}<ul class="errorlist">{% for e in address_form.neighborhood.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-field span-2">
+            <label class="form-label" for="{{ address_form.address_street.id_for_label }}">Rua / Avenida</label>
+            {{ address_form.address_street }}
+            {% if address_form.address_street.errors %}<ul class="errorlist">{% for e in address_form.address_street.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="{{ address_form.address_number.id_for_label }}">Número</label>
+            {{ address_form.address_number }}
+            {% if address_form.address_number.errors %}<ul class="errorlist">{% for e in address_form.address_number.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="{{ address_form.address_complement.id_for_label }}">Complemento <span class="form-label-opt">(opcional)</span></label>
+            {{ address_form.address_complement }}
+          </div>
+        </div>
+
+        <div class="profile-edit-actions">
+          <button type="button" class="btn-secondary" id="address-cancel-btn">Cancelar</button>
+          <button type="submit" class="btn-primary">Salvar endereço</button>
+        </div>
+      </form>
+    </section>
+
+    </div>{# .profile-aside #}
 
     {# ── Histórico de compras ───────────────────────────────────── #}
     <section class="profile-history">
@@ -136,6 +218,8 @@
   </div>
 </div>
 
+{{ delivery_areas|json_script:"delivery-data" }}
+
 {# ── Modal de confirmação "repetir pedido" ────────────────────── #}
 <div class="confirm-modal" id="repeat-modal" hidden>
   <div class="confirm-modal-backdrop" data-close></div>
@@ -157,16 +241,16 @@
 {% block extra_js %}
 <script src="{% static 'js/auth.js' %}?v=4"></script>
 <script>
-  // Edição dos dados do perfil: mostra o formulário só ao clicar no lápis.
-  (function () {
-    var card = document.getElementById('account-card');
-    var editBtn = document.getElementById('profile-edit-btn');
-    var cancelBtn = document.getElementById('profile-cancel-btn');
+  // Edição em linha (dados da conta e endereço): mostra o formulário só ao
+  // clicar no lápis e esconde de novo no "Cancelar".
+  function wireEditToggle(cardId, editBtnId, cancelBtnId) {
+    var card = document.getElementById(cardId);
+    var editBtn = document.getElementById(editBtnId);
+    var cancelBtn = document.getElementById(cancelBtnId);
     if (!card || !editBtn) return;
-
     editBtn.addEventListener('click', function () {
       card.classList.add('is-editing');
-      var first = card.querySelector('.profile-edit input:not([type=hidden])');
+      var first = card.querySelector('.profile-edit input:not([type=hidden]), .profile-edit select');
       if (first) first.focus();
     });
     if (cancelBtn) {
@@ -174,6 +258,40 @@
         card.classList.remove('is-editing');
       });
     }
+  }
+  wireEditToggle('account-card', 'profile-edit-btn', 'profile-cancel-btn');
+  wireEditToggle('address-card', 'address-edit-btn', 'address-cancel-btn');
+
+  // Bairros dependentes da cidade no formulário de endereço.
+  (function () {
+    var dataEl = document.getElementById('delivery-data');
+    var citySel = document.getElementById('id_addr_city');
+    var nbSel = document.getElementById('id_addr_neighborhood');
+    if (!dataEl || !citySel || !nbSel) return;
+
+    var AREAS = JSON.parse(dataEl.textContent || '{}');
+
+    function buildNeighborhoods(cityId, selectId) {
+      nbSel.innerHTML = '';
+      var placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = cityId ? 'Selecione o bairro' : 'Selecione a cidade primeiro';
+      nbSel.appendChild(placeholder);
+      var city = AREAS[cityId];
+      if (city) {
+        city.neighborhoods.forEach(function (n) {
+          var opt = document.createElement('option');
+          opt.value = n.id;
+          opt.textContent = n.name;
+          if (String(n.id) === String(selectId)) opt.selected = true;
+          nbSel.appendChild(opt);
+        });
+      }
+      nbSel.disabled = !cityId;
+    }
+
+    buildNeighborhoods(citySel.value, nbSel.value);
+    citySel.addEventListener('change', function () { buildNeighborhoods(this.value, null); });
   })();
 
   (function () {

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=38">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=41">
 </head>
 <body>
 
@@ -135,6 +135,17 @@
       if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && sidebar.classList.contains('is-open')) closeSidebar();
+      });
+    })();
+
+    // ── Some automaticamente os avisos (flash messages) ──────────
+    (function () {
+      var msgs = document.querySelectorAll('.messages .message');
+      msgs.forEach(function (msg) {
+        setTimeout(function () {
+          msg.classList.add('is-hiding');
+          setTimeout(function () { msg.remove(); }, 300);
+        }, 4000);
       });
     })();
   </script>

@@ -87,7 +87,7 @@ def checkout(request):
         if is_ajax:
             return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
     else:
-        form = CheckoutForm(initial={'fulfillment_method': Order.FulfillmentMethod.DELIVERY})
+        form = CheckoutForm(initial=_checkout_initial(request))
 
     # Delivery fee is computed from the selected city + neighborhood, so it
     # starts at zero and is updated client-side as the customer chooses.
@@ -105,6 +105,30 @@ def checkout(request):
             'mercadopago_public_key': settings.MERCADOPAGO_PUBLIC_KEY,
         },
     )
+
+
+def _checkout_initial(request):
+    """Pré-preenche o checkout com os dados salvos do cliente logado.
+
+    Evita digitar de novo nome, telefone e endereço já cadastrados no perfil.
+    """
+    initial = {'fulfillment_method': Order.FulfillmentMethod.DELIVERY}
+    user = request.user
+    if not user.is_authenticated:
+        return initial
+
+    initial['customer_name'] = user.get_full_name() or user.get_username()
+    profile = getattr(user, 'profile', None)
+    if profile is not None:
+        initial.update({
+            'phone': profile.phone,
+            'address_street': profile.address_street,
+            'address_number': profile.address_number,
+            'address_complement': profile.address_complement,
+            'city': profile.city_id,
+            'neighborhood': profile.neighborhood_id,
+        })
+    return initial
 
 
 def _delivery_areas_data():

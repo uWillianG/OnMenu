@@ -11,6 +11,8 @@ from django.contrib.auth.validators import (
     UnicodeUsernameValidator,
 )
 
+from orders.models import City, Neighborhood
+
 from .models import Profile
 
 PASSWORD_HELP_TEXT = (
@@ -191,6 +193,63 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
         if taken.exists():
             raise forms.ValidationError('Já existe uma conta com este e-mail.')
         return email
+
+
+class AddressForm(forms.ModelForm):
+    """Endereço salvo do cliente, editado no perfil e reusado no checkout."""
+
+    city = forms.ModelChoiceField(
+        label='Cidade',
+        queryset=City.objects.filter(is_active=True),
+        required=False,
+        empty_label='Selecione a cidade',
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_addr_city'}),
+    )
+    neighborhood = forms.ModelChoiceField(
+        label='Bairro',
+        queryset=Neighborhood.objects.filter(is_active=True),
+        required=False,
+        empty_label='Selecione o bairro',
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_addr_neighborhood'}),
+    )
+
+    class Meta:
+        model = Profile
+        fields = (
+            'city',
+            'neighborhood',
+            'address_street',
+            'address_number',
+            'address_complement',
+        )
+        widgets = {
+            'address_street': forms.TextInput(attrs={
+                'class': 'form-input', 'autocomplete': 'address-line1',
+                'placeholder': 'Rua / Avenida',
+            }),
+            'address_number': forms.TextInput(attrs={
+                'class': 'form-input', 'autocomplete': 'address-line2',
+                'inputmode': 'numeric', 'placeholder': 'Nº',
+            }),
+            'address_complement': forms.TextInput(attrs={
+                'class': 'form-input', 'placeholder': 'Apto, bloco, referência',
+            }),
+        }
+        labels = {
+            'address_street': 'Rua / Avenida',
+            'address_number': 'Número',
+            'address_complement': 'Complemento',
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        city = cleaned_data.get('city')
+        neighborhood = cleaned_data.get('neighborhood')
+        if neighborhood and city and neighborhood.city_id != city.id:
+            self.add_error('neighborhood', 'Selecione um bairro da cidade escolhida.')
+        if neighborhood and not city:
+            self.add_error('city', 'Selecione a cidade do bairro.')
+        return cleaned_data
 
 
 class StyledPasswordResetForm(StyledFormMixin, PasswordResetForm):
