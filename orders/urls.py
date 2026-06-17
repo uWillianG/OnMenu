@@ -22,6 +22,11 @@ urlpatterns = [
     path('webhook/cartao/', views.webhook_card, name='webhook_card'),
     path('staff/orders/', views.staff_order_list, name='staff_order_list'),
     path(
+        'staff/orders/bulk-update/',
+        views.staff_orders_bulk_update,
+        name='staff_orders_bulk_update',
+    ),
+    path(
         'staff/orders/print/active/',
         views.staff_orders_print_active,
         name='staff_orders_print_active',
@@ -30,6 +35,11 @@ urlpatterns = [
         'staff/orders/<str:order_number>/print/',
         views.staff_order_print,
         name='staff_order_print',
+    ),
+    path(
+        'staff/orders/<str:order_number>/summary/',
+        views.staff_order_summary,
+        name='staff_order_summary',
     ),
     path(
         'staff/orders/<str:order_number>/',

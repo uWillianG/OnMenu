@@ -169,6 +169,42 @@ class OrderViewsTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PREPARING)
 
+    def test_staff_can_bulk_update_order_status(self):
+        orders = [
+            Order.objects.create(
+                restaurant=self.restaurant,
+                customer_name=f'Cliente {i}',
+                phone='555-0102',
+                fulfillment_method=Order.FulfillmentMethod.PICKUP,
+                payment_method=Order.PaymentMethod.CASH,
+                subtotal=Decimal('20.00'),
+                total=Decimal('20.00'),
+            )
+            for i in range(3)
+        ]
+        staff_user = User.objects.create_user(
+            username='staff', password='password', is_staff=True,
+        )
+        self.client.force_login(staff_user)
+
+        selected = orders[:2]
+        response = self.client.post(
+            reverse('orders:staff_orders_bulk_update'),
+            {
+                'order_numbers': [o.order_number for o in selected],
+                'status': Order.Status.OUT_FOR_DELIVERY,
+                'next': reverse('orders:staff_order_list'),
+            },
+        )
+
+        self.assertRedirects(response, reverse('orders:staff_order_list'))
+        for o in selected:
+            o.refresh_from_db()
+            self.assertEqual(o.status, Order.Status.OUT_FOR_DELIVERY)
+        # O pedido não selecionado permanece inalterado.
+        orders[2].refresh_from_db()
+        self.assertEqual(orders[2].status, Order.Status.RECEIVED)
+
 
 class PixPaymentTests(TestCase):
     def setUp(self):

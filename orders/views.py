@@ -13,6 +13,9 @@ from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
@@ -497,13 +500,33 @@ def track_order(request, order_number):
 
 @staff_member_required
 def staff_order_list(request):
-    status_filter = request.GET.get('status', '')
     orders = Order.objects.select_related('restaurant').prefetch_related('items')
+
+    status_filter = request.GET.get('status', '')
+    payment_filter = request.GET.get('payment_method', '')
+    fulfillment_filter = request.GET.get('fulfillment_method', '')
+    date_filter = request.GET.get('date', '')
 
     if status_filter in Order.Status.values:
         orders = orders.filter(status=status_filter)
     else:
         status_filter = ''
+
+    if payment_filter in Order.PaymentMethod.values:
+        orders = orders.filter(payment_method=payment_filter)
+    else:
+        payment_filter = ''
+
+    if fulfillment_filter in Order.FulfillmentMethod.values:
+        orders = orders.filter(fulfillment_method=fulfillment_filter)
+    else:
+        fulfillment_filter = ''
+
+    parsed_date = parse_date(date_filter) if date_filter else None
+    if parsed_date:
+        orders = orders.filter(created_at__date=parsed_date)
+    else:
+        date_filter = ''
 
     # Separa pedidos em andamento (ativos) dos finalizados (entregues/cancelados),
     # avaliando em Python para não fazer duas queries adicionais.
@@ -520,7 +543,15 @@ def staff_order_list(request):
             'active_count': len(active_orders),
             'inactive_count': len(inactive_orders),
             'status_filter': status_filter,
+            'payment_filter': payment_filter,
+            'fulfillment_filter': fulfillment_filter,
+            'date_filter': date_filter,
+            'has_filters': any([
+                status_filter, payment_filter, fulfillment_filter, date_filter,
+            ]),
             'status_choices': Order.Status.choices,
+            'payment_choices': Order.PaymentMethod.choices,
+            'fulfillment_choices': Order.FulfillmentMethod.choices,
         },
     )
 
@@ -558,6 +589,46 @@ def staff_orders_print_active(request):
             'scope_label': 'Pedidos ativos',
         },
     )
+
+
+@staff_member_required
+def staff_order_summary(request, order_number):
+    """Fragmento HTML com o resumo do pedido, exibido em modal no painel."""
+    order = get_object_or_404(
+        Order.objects.select_related('restaurant').prefetch_related('items__options'),
+        order_number=order_number,
+    )
+    return render(request, 'orders/_order_summary.html', {'order': order})
+
+
+@staff_member_required
+@require_http_methods(['POST'])
+def staff_orders_bulk_update(request):
+    """Atualiza a situação de vários pedidos selecionados de uma só vez."""
+    order_numbers = request.POST.getlist('order_numbers')
+    new_status = request.POST.get('status', '')
+
+    if new_status not in Order.Status.values:
+        messages.warning(request, 'Selecione uma situação válida.')
+    elif not order_numbers:
+        messages.warning(request, 'Selecione ao menos um pedido.')
+    else:
+        updated = Order.objects.filter(order_number__in=order_numbers).update(
+            status=new_status,
+            updated_at=timezone.now(),
+        )
+        label = Order.Status(new_status).label
+        messages.success(
+            request,
+            f'{updated} pedido(s) atualizado(s) para "{label}".',
+        )
+
+    next_url = request.POST.get('next', '')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}
+    ):
+        return redirect(next_url)
+    return redirect('orders:staff_order_list')
 
 
 @staff_member_required

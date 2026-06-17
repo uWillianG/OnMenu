@@ -8,56 +8,287 @@
 
     <div class="split-heading">
       <h1 class="page-h1"><svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>Pedidos</h1>
-      <div class="staff-toolbar">
-        <a class="btn-primary btn-print-all" href="{% url 'orders:staff_orders_print_active' %}"
-           target="_blank" rel="noopener">
+    </div>
+
+    <div class="view-switch-row">
+      <label class="seg-toggle" title="Alternar entre ativos e finalizados">
+        <input type="checkbox" id="view-toggle" class="seg-input" checked>
+        <span class="seg-opt seg-active">Ativos</span>
+        <span class="seg-opt seg-inactive">Finalizados</span>
+      </label>
+      <div class="view-switch-actions">
+        <button type="button" class="card-icon-btn{% if has_filters %} has-filters{% endif %}"
+                id="filter-open" title="Filtrar pedidos" aria-label="Filtrar pedidos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+        <a class="card-icon-btn" href="{% url 'orders:staff_orders_print_active' %}"
+           target="_blank" rel="noopener" title="Imprimir ativos" aria-label="Imprimir pedidos ativos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Imprimir ativos
         </a>
-        <form class="filter-form" method="get">
-          <select class="filter-select" name="status">
-            <option value="">Todos os status</option>
-            {% for value, label in status_choices %}
-              <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-          <button class="btn-secondary" type="submit" style="padding:8px 14px;font-size:.88rem">Filtrar</button>
-        </form>
       </div>
     </div>
 
-    <section class="order-section">
-      <div class="order-section-head">
-        <h2 class="order-section-title">Ativos <span class="order-section-count">{{ active_count }}</span></h2>
-      </div>
-      <div class="order-cards">
-        {% for order in active_orders %}
-          {% include 'orders/_staff_order_card.html' %}
-        {% empty %}
-          <div class="empty-state">
-            <h2>Nenhum pedido ativo</h2>
-            <p>Os novos pedidos aparecem aqui assim que chegam.</p>
-          </div>
-        {% endfor %}
-      </div>
-    </section>
+    <form method="post" id="bulk-form" action="{% url 'orders:staff_orders_bulk_update' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
 
-    <section class="order-section">
-      <div class="order-section-head">
-        <h2 class="order-section-title">Finalizados <span class="order-section-count">{{ inactive_count }}</span></h2>
+      <section class="order-section" id="section-active">
+        <div class="order-section-head">
+          <h2 class="order-section-title">Ativos <span class="order-section-count">{{ active_count }}</span></h2>
+          {% if active_orders %}
+            <label class="select-all-label">
+              <input type="checkbox" class="select-all"> Selecionar todos
+            </label>
+          {% endif %}
+        </div>
+        <div class="order-cards">
+          {% for order in active_orders %}
+            {% include 'orders/_staff_order_card.html' %}
+          {% empty %}
+            <div class="empty-state">
+              <h2>Nenhum pedido ativo</h2>
+              <p>Os novos pedidos aparecem aqui assim que chegam.</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="order-section" id="section-finished" hidden>
+        <div class="order-section-head">
+          <h2 class="order-section-title">Finalizados <span class="order-section-count">{{ inactive_count }}</span></h2>
+          {% if inactive_orders %}
+            <label class="select-all-label">
+              <input type="checkbox" class="select-all"> Selecionar todos
+            </label>
+          {% endif %}
+        </div>
+        <div class="order-cards">
+          {% for order in inactive_orders %}
+            {% include 'orders/_staff_order_card.html' %}
+          {% empty %}
+            <div class="empty-state">
+              <h2>Nenhum pedido finalizado</h2>
+              <p>Pedidos entregues ou cancelados aparecem aqui.</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="bulk-bar" id="bulk-bar" role="region" aria-label="Ações em lote">
+        <div class="bulk-info">
+          <span class="bulk-count" id="bulk-count">0</span>
+          <span class="bulk-info-text">selecionado(s)</span>
+        </div>
+        <select class="bulk-select" id="bulk-status" name="status" required aria-label="Nova situação">
+          <option value="">Alterar situação para…</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button class="btn-primary bulk-apply" id="bulk-apply" type="submit">Aplicar</button>
+        <button class="bulk-clear" id="bulk-clear" type="button" aria-label="Limpar seleção" title="Limpar seleção">✕</button>
       </div>
-      <div class="order-cards">
-        {% for order in inactive_orders %}
-          {% include 'orders/_staff_order_card.html' %}
-        {% empty %}
-          <div class="empty-state">
-            <h2>Nenhum pedido finalizado</h2>
-            <p>Pedidos entregues ou cancelados aparecem aqui.</p>
-          </div>
-        {% endfor %}
-      </div>
-    </section>
+    </form>
 
   </div>
 </div>
+
+<div class="modal-overlay" id="summary-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Resumo do pedido">
+    <button class="modal-close" id="summary-close" type="button" aria-label="Fechar">✕</button>
+    <div class="modal-body" id="summary-body">
+      <p class="summary-loading">Carregando…</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="filter-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Filtros">
+    <button class="modal-close" id="filter-close" type="button" aria-label="Fechar">✕</button>
+    <form class="modal-body filter-modal" method="get">
+      <h2 class="filter-modal-title">Filtrar pedidos</h2>
+
+      <div class="form-field">
+        <label class="form-label" for="filter-status">Situação</label>
+        <select class="form-select" id="filter-status" name="status">
+          <option value="">Todas</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="form-label" for="filter-payment">Forma de pagamento</label>
+        <select class="form-select" id="filter-payment" name="payment_method">
+          <option value="">Todas</option>
+          {% for value, label in payment_choices %}
+            <option value="{{ value }}"{% if payment_filter == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="form-label" for="filter-fulfillment">Entrega ou retirada</label>
+        <select class="form-select" id="filter-fulfillment" name="fulfillment_method">
+          <option value="">Ambos</option>
+          {% for value, label in fulfillment_choices %}
+            <option value="{{ value }}"{% if fulfillment_filter == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="form-label" for="filter-date">Data</label>
+        <input class="form-input" id="filter-date" type="date" name="date" value="{{ date_filter }}">
+      </div>
+
+      <div class="filter-modal-actions">
+        <a class="btn-secondary" href="{% url 'orders:staff_order_list' %}">Limpar filtros</a>
+        <button class="btn-primary" type="submit">Aplicar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    var form = document.getElementById('bulk-form');
+    if (!form) return;
+    var bar       = document.getElementById('bulk-bar');
+    var countEl   = document.getElementById('bulk-count');
+    var applyBtn  = document.getElementById('bulk-apply');
+    var clearBtn  = document.getElementById('bulk-clear');
+    var statusSel = document.getElementById('bulk-status');
+    var checks    = form.querySelectorAll('.order-check');
+    var selectAll = form.querySelectorAll('.select-all');
+
+    function selectedCount() {
+      return form.querySelectorAll('.order-check:checked').length;
+    }
+
+    function refresh() {
+      var n = selectedCount();
+      countEl.textContent = n;
+      bar.classList.toggle('is-active', n > 0);
+      document.body.classList.toggle('has-bulk-bar', n > 0);
+      applyBtn.disabled = (n === 0 || !statusSel.value);
+      selectAll.forEach(function (sa) {
+        var section = sa.closest('.order-section');
+        var boxes = section.querySelectorAll('.order-check');
+        var checked = section.querySelectorAll('.order-check:checked').length;
+        sa.checked = boxes.length > 0 && checked === boxes.length;
+        sa.indeterminate = checked > 0 && checked < boxes.length;
+      });
+    }
+
+    checks.forEach(function (c) { c.addEventListener('change', refresh); });
+    selectAll.forEach(function (sa) {
+      sa.addEventListener('change', function () {
+        var section = sa.closest('.order-section');
+        section.querySelectorAll('.order-check').forEach(function (c) {
+          c.checked = sa.checked;
+        });
+        refresh();
+      });
+    });
+    statusSel.addEventListener('change', refresh);
+    clearBtn.addEventListener('click', function () {
+      checks.forEach(function (c) { c.checked = false; });
+      statusSel.value = '';
+      refresh();
+    });
+    form.addEventListener('submit', function (e) {
+      if (selectedCount() === 0 || !statusSel.value) e.preventDefault();
+    });
+
+    refresh();
+  })();
+
+  // ── Modal de resumo do pedido ────────────────────────────────
+  (function () {
+    var overlay = document.getElementById('summary-overlay');
+    var body    = document.getElementById('summary-body');
+    var closeBtn = document.getElementById('summary-close');
+    if (!overlay || !body) return;
+
+    function openModal() {
+      overlay.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+    function closeModal() {
+      overlay.hidden = true;
+      document.body.classList.remove('no-scroll');
+      body.innerHTML = '<p class="summary-loading">Carregando…</p>';
+    }
+
+    document.querySelectorAll('.card-view-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var url = btn.getAttribute('data-summary-url');
+        body.innerHTML = '<p class="summary-loading">Carregando…</p>';
+        openModal();
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (r) {
+            if (!r.ok) throw new Error('http ' + r.status);
+            return r.text();
+          })
+          .then(function (html) { body.innerHTML = html; })
+          .catch(function () {
+            body.innerHTML = '<p class="summary-loading">Não foi possível carregar o resumo.</p>';
+          });
+      });
+    });
+
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !overlay.hidden) closeModal();
+    });
+  })();
+
+  // ── Modal de filtros ─────────────────────────────────────────
+  (function () {
+    var overlay = document.getElementById('filter-overlay');
+    var openBtn = document.getElementById('filter-open');
+    var closeBtn = document.getElementById('filter-close');
+    if (!overlay || !openBtn) return;
+
+    function open() { overlay.hidden = false; document.body.classList.add('no-scroll'); }
+    function close() { overlay.hidden = true; document.body.classList.remove('no-scroll'); }
+
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !overlay.hidden) close();
+    });
+  })();
+
+  // ── Alterna entre as listas de ativos e finalizados ──────────
+  (function () {
+    var toggle = document.getElementById('view-toggle');
+    var active = document.getElementById('section-active');
+    var finished = document.getElementById('section-finished');
+    if (!toggle || !active || !finished) return;
+    var statusSel = document.getElementById('bulk-status');
+
+    function apply() {
+      active.hidden = !toggle.checked;
+      finished.hidden = toggle.checked;
+      // Limpa a seleção da lista oculta para não agir sobre itens invisíveis.
+      var hidden = toggle.checked ? finished : active;
+      hidden.querySelectorAll('.order-check:checked').forEach(function (c) {
+        c.checked = false;
+      });
+      if (statusSel) statusSel.dispatchEvent(new Event('change'));
+    }
+
+    toggle.addEventListener('change', apply);
+    apply();
+  })();
+</script>
 {% endblock %}

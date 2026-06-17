@@ -1,0 +1,45 @@
+{% comment %}Resumo do pedido carregado via AJAX no modal do painel. Espera `order`.{% endcomment %}
+<div class="order-summary">
+
+  <div class="order-summary-head">
+    <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
+    <h2 class="order-summary-title">{{ order.order_number }}</h2>
+    <p class="order-summary-date">{{ order.created_at|date:"d/m/Y · H:i" }}</p>
+  </div>
+
+  <div class="summary-block">
+    <h3 class="summary-block-title">Cliente</h3>
+    <p class="detail-meta"><strong>{{ order.customer_name }}</strong></p>
+    <p class="detail-meta">{{ order.phone }}</p>
+    <p class="detail-meta">{{ order.get_fulfillment_method_display }} · {{ order.get_payment_method_display }}
+      <span class="status-pill {{ order.payment_status }}" style="margin-left:4px">{{ order.get_payment_status_display }}</span>
+    </p>
+    {% if order.address %}<p class="detail-meta">{{ order.address|linebreaksbr }}</p>{% endif %}
+    {% if order.notes %}<p class="detail-meta">📝 {{ order.notes }}</p>{% endif %}
+  </div>
+
+  <div class="summary-block">
+    <h3 class="summary-block-title">Itens</h3>
+    {% for item in order.items.all %}
+      <div class="summary-row">
+        <span>
+          {{ item.quantity }}× {{ item.item_name }}
+          {% for opt in item.options.all %}
+            <span class="option-note">{{ opt.group_name }}: {{ opt.choice_name }}{% if opt.extra_price %} (+{{ currency_symbol }} {{ opt.extra_price|floatformat:2 }}){% endif %}</span>
+          {% endfor %}
+          {% if item.notes %}<span class="option-note">↳ {{ item.notes }}</span>{% endif %}
+        </span>
+        <strong>{{ currency_symbol }} {{ item.line_total|floatformat:2 }}</strong>
+      </div>
+    {% endfor %}
+    <div class="summary-row"><span>Subtotal</span><strong>{{ currency_symbol }} {{ order.subtotal|floatformat:2 }}</strong></div>
+    <div class="summary-row"><span>Taxa de entrega</span><strong>{{ currency_symbol }} {{ order.delivery_fee|floatformat:2 }}</strong></div>
+    <div class="summary-row grand"><span>Total</span><strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong></div>
+  </div>
+
+  <div class="summary-actions">
+    <a class="btn-secondary" href="{% url 'orders:staff_order_detail' order.order_number %}">Abrir pedido</a>
+    <a class="btn-primary" href="{% url 'orders:staff_order_print' order.order_number %}" target="_blank" rel="noopener">Imprimir</a>
+  </div>
+
+</div>

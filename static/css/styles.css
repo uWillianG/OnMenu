@@ -1576,8 +1576,183 @@ body.no-scroll { overflow: hidden; }
 .btn-print-all svg { width: 17px; height: 17px; }
 
 .order-section { display: grid; gap: 12px; }
+.order-section[hidden] { display: none; }
 
-.order-section-head { display: flex; align-items: center; gap: 10px; }
+/* Seletor Ativos / Finalizados (mostra só uma lista por vez) */
+.view-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.view-switch-actions { display: flex; align-items: center; gap: 8px; }
+
+.seg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+}
+.seg-input { position: absolute; opacity: 0; width: 0; height: 0; }
+.seg-opt {
+  padding: 7px 18px;
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--muted);
+  border-radius: 999px;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.seg-toggle:has(.seg-input:checked) .seg-active,
+.seg-toggle:has(.seg-input:not(:checked)) .seg-inactive {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-xs);
+}
+.seg-toggle:has(.seg-input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.order-section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* "Selecionar todos" — pílula clicável que acende quando ativa */
+.select-all-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.select-all-label:hover { border-color: var(--border-strong); color: var(--text); }
+.select-all-label:has(.select-all:checked) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.select-all {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex: none;
+}
+
+/* Checkbox de seleção do pedido: pequeno, no canto superior direito,
+   alinhado com a linha do código do pedido. */
+.order-check {
+  position: absolute;
+  top: 18px;
+  right: 16px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* Card selecionado: apenas contornado (sem preenchimento) */
+.order-card:has(.order-check:checked) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1.5px var(--primary), var(--shadow-xs);
+}
+
+/* Barra de ação em lote — cartão flutuante */
+.bulk-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translate(-50%, calc(100% + 28px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(580px, calc(100% - 24px));
+  padding: 10px 10px 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(17, 24, 39, .24);
+  transition: transform .26s cubic-bezier(.2, .85, .25, 1), opacity .2s ease;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 160;
+}
+.bulk-bar.is-active { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+
+/* A barra de lote ocupa o rodapé central; esconde o carrinho flutuante
+   enquanto há seleção para não sobrepor um ao outro. */
+body.has-bulk-bar .float-cart { display: none !important; }
+
+.bulk-info { display: inline-flex; align-items: center; gap: 9px; flex: none; }
+.bulk-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: .9rem;
+  font-weight: 800;
+}
+.bulk-info-text { font-size: .82rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+
+.bulk-select {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bulk-apply { padding: 10px 20px; white-space: nowrap; }
+.bulk-apply:disabled { opacity: .45; cursor: not-allowed; }
+
+.bulk-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.bulk-clear:hover { color: var(--primary); border-color: var(--primary); }
+
+/* Empurra o conteúdo para a barra não cobrir os últimos cards */
+body.has-bulk-bar { padding-bottom: 96px; }
+
+@media (max-width: 560px) {
+  .bulk-bar { flex-wrap: wrap; padding: 12px; gap: 10px; }
+  .bulk-info { order: 1; }
+  .bulk-clear { order: 2; margin-left: auto; }
+  .bulk-select { order: 3; flex-basis: 100%; }
+  .bulk-apply { order: 4; flex: 1; }
+}
 
 .order-section-title {
   font-size: 1.05rem;
@@ -1603,7 +1778,7 @@ body.no-scroll { overflow: hidden; }
   font-weight: 800;
 }
 
-.card-print-btn {
+.card-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1613,10 +1788,64 @@ body.no-scroll { overflow: hidden; }
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
+  font: inherit;
+  cursor: pointer;
   transition: color .15s, border-color .15s;
 }
-.card-print-btn:hover { color: var(--primary); border-color: var(--primary); }
-.card-print-btn svg { width: 18px; height: 18px; }
+.card-icon-btn { position: relative; }
+.card-icon-btn:hover { color: var(--primary); border-color: var(--primary); }
+.card-icon-btn svg { width: 18px; height: 18px; }
+
+/* Ponto indicando que há filtros ativos */
+.card-icon-btn.has-filters {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.card-icon-btn.has-filters::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--surface);
+}
+
+/* Modal de filtros */
+.filter-modal-title { font-size: 1.3rem; font-weight: 800; letter-spacing: -.4px; }
+.filter-modal-actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+.filter-modal-actions .btn-primary,
+.filter-modal-actions .btn-secondary { flex: 1; text-align: center; min-width: 120px; }
+
+/* Modal de resumo do pedido */
+.order-summary { display: grid; gap: 18px; }
+
+.order-summary-head { display: grid; gap: 6px; padding-right: 40px; }
+.order-summary-title { font-size: 1.35rem; font-weight: 800; letter-spacing: -.4px; }
+.order-summary-date { font-size: .85rem; color: var(--muted); }
+.order-summary-head .status-pill { justify-self: start; }
+
+.summary-block {
+  display: grid;
+  gap: 7px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.summary-block-title {
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--muted);
+}
+
+.summary-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.summary-actions .btn-primary,
+.summary-actions .btn-secondary { flex: 1; text-align: center; min-width: 130px; }
+
+.summary-loading { padding: 30px; text-align: center; color: var(--muted); font-weight: 600; }
 
 .redirect-note { font-size: .85rem; color: var(--muted); font-weight: 600; text-align: center; margin-top: 2px; }
 
@@ -1647,15 +1876,16 @@ body.no-scroll { overflow: hidden; }
 
 .order-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 16px 44px 16px 20px;
   box-shadow: var(--shadow-xs);
   flex-wrap: wrap;
+  position: relative;
   transition: box-shadow .15s, transform .15s;
 }
 
