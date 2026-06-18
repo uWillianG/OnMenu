@@ -2673,7 +2673,12 @@ body.has-bulk-bar { padding-bottom: 96px; }
 .poi-options { display: block; color: var(--muted); font-size: .8rem; }
 .poi-total { font-weight: 700; color: var(--text); white-space: nowrap; }
 
-.profile-order-actions { display: flex; justify-content: flex-end; }
+.profile-order-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+.btn-track { display: inline-flex; align-items: center; gap: 6px; }
+
+.profile-orders-link-text { color: var(--muted); font-size: .9rem; margin: 2px 0 14px; line-height: 1.5; }
+.profile-orders-link .btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 5px; width: auto; }
 .btn-repeat {
   display: inline-flex;
   align-items: center;

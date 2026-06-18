@@ -70,23 +70,27 @@ def profile(request):
                 messages.success(request, 'Dados atualizados com sucesso.')
                 return redirect('accounts:profile')
 
-    orders = (
-        Order.objects
-        .filter(user=request.user)
-        .prefetch_related('items__options')
-        .order_by('-created_at')
-    )
-
     return render(
         request,
         'registration/profile.html',
         {
             'form': form,
             'address_form': address_form,
-            'orders': orders,
             'delivery_areas': _delivery_areas_data(),
         },
     )
+
+
+@login_required
+def order_history(request):
+    """Tela de consulta: lista todos os pedidos do usuário."""
+    orders = (
+        Order.objects
+        .filter(user=request.user)
+        .prefetch_related('items__options')
+        .order_by('-created_at')
+    )
+    return render(request, 'registration/order_history.html', {'orders': orders})
 
 
 @login_required

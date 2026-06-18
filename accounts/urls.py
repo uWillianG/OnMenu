@@ -12,6 +12,7 @@ urlpatterns = [
     path('signup/', views.signup, name='signup'),
     path('perfil/', views.profile, name='profile'),
     path('perfil/salvar-endereco/', views.save_address, name='save_address'),
+    path('meus-pedidos/', views.order_history, name='order_history'),
 
     # Recuperação de senha (esqueci a senha)
     path(

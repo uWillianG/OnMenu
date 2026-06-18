@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Meus pedidos | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content order-history-page">
+
+  <h1 class="page-h1">
+    <svg class="page-h1-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+    Meus pedidos
+  </h1>
+
+  <section class="profile-history">
+    <div class="order-cards">
+      {% for order in orders %}
+        <article class="profile-order">
+          <div class="profile-order-top">
+            <div class="order-card-info">
+              <h2>{{ order.order_number }}</h2>
+              <p class="order-card-meta">
+                {{ order.created_at|date:"d/m/Y H:i" }} &nbsp;·&nbsp;
+                {{ order.get_payment_method_display }}
+              </p>
+            </div>
+            <div class="order-card-right">
+              <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
+              <span class="order-total">{{ currency_symbol }} {{ order.total|floatformat:2 }}</span>
+            </div>
+          </div>
+
+          <ul class="profile-order-items">
+            {% for item in order.items.all %}
+              <li>
+                <span class="poi-qty">{{ item.quantity }}×</span>
+                <span class="poi-name">
+                  {{ item.item_name }}
+                  {% if item.options.all %}
+                    <small class="poi-options">
+                      {% for opt in item.options.all %}{{ opt.choice_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </small>
+                  {% endif %}
+                </span>
+                <span class="poi-total">{{ currency_symbol }} {{ item.line_total|floatformat:2 }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+
+          <div class="profile-order-actions">
+            {% if order.is_active %}
+              <a class="btn-secondary btn-track" href="{% url 'orders:track_order' order.order_number %}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Acompanhar
+              </a>
+            {% endif %}
+            <button type="button" class="btn-primary btn-repeat"
+                    data-order="{{ order.order_number }}"
+                    data-url="{% url 'orders:repeat_order' order.order_number %}">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Repetir pedido
+            </button>
+          </div>
+        </article>
+      {% empty %}
+        <div class="empty-state">
+          <h2>Você ainda não fez pedidos</h2>
+          <p>Quando fizer um pedido logado, ele aparecerá aqui.</p>
+          <a href="{% url 'menu:menu_list' %}" class="btn-primary" style="margin-top:8px">Ver cardápio</a>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+</div>
+
+{# ── Modal de confirmação "repetir pedido" ────────────────────── #}
+<div class="confirm-modal" id="repeat-modal" hidden>
+  <div class="confirm-modal-backdrop" data-close></div>
+  <div class="confirm-modal-panel" role="dialog" aria-modal="true" aria-labelledby="repeat-modal-title">
+    <h3 class="confirm-modal-title" id="repeat-modal-title">Repetir pedido</h3>
+    <p class="confirm-modal-text">Você realmente deseja repetir este pedido?</p>
+    <p class="confirm-modal-sub" id="repeat-modal-order"></p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-secondary" data-close>Não</button>
+      <form method="post" id="repeat-form" style="margin:0">
+        {% csrf_token %}
+        <button type="submit" class="btn-primary">Sim, repetir</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    var modal = document.getElementById('repeat-modal');
+    var form  = document.getElementById('repeat-form');
+    var label = document.getElementById('repeat-modal-order');
+    if (!modal || !form) return;
+
+    function open(url, orderNumber) {
+      form.setAttribute('action', url);
+      label.textContent = orderNumber;
+      modal.hidden = false;
+      document.body.classList.add('no-scroll');
+    }
+    function close() {
+      modal.hidden = true;
+      document.body.classList.remove('no-scroll');
+    }
+
+    document.querySelectorAll('.btn-repeat').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        open(btn.dataset.url, btn.dataset.order);
+      });
+    });
+    modal.querySelectorAll('[data-close]').forEach(function (el) {
+      el.addEventListener('click', close);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.hidden) close();
+    });
+  })();
+</script>
+{% endblock %}
