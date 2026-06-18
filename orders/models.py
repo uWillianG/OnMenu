@@ -185,6 +185,37 @@ class Order(models.Model):
         """Pedido ainda em andamento (não entregue nem cancelado)."""
         return self.status in self.ACTIVE_STATUSES
 
+    def _tracking_steps(self):
+        """Etapas do acompanhamento conforme entrega ou retirada."""
+        if self.fulfillment_method == self.FulfillmentMethod.DELIVERY:
+            return [
+                self.Status.RECEIVED,
+                self.Status.PREPARING,
+                self.Status.OUT_FOR_DELIVERY,
+                self.Status.DELIVERED,
+            ]
+        return [self.Status.RECEIVED, self.Status.PREPARING, self.Status.DELIVERED]
+
+    @property
+    def status_percent(self):
+        """Progresso (0–100) do pedido para a barra do acompanhamento."""
+        steps = self._tracking_steps()
+        if self.status not in steps:
+            return 0
+        return round((steps.index(self.status) + 1) / len(steps) * 100)
+
+    @property
+    def tracking_hint(self):
+        """Frase amigável sobre a situação atual do pedido."""
+        hints = {
+            self.Status.RECEIVED: 'Pedido recebido — já vamos começar.',
+            self.Status.PREPARING: 'Seu pedido está sendo preparado.',
+            self.Status.OUT_FOR_DELIVERY: 'Saiu para entrega, chega já!',
+            self.Status.DELIVERED: 'Pedido concluído. Bom apetite!',
+            self.Status.CANCELLED: 'Pedido cancelado.',
+        }
+        return hints.get(self.status, '')
+
     @property
     def has_structured_address(self):
         return any([
@@ -329,6 +360,39 @@ class CardPayment(models.Model):
 
     def __str__(self):
         return f'Cartão {self.external_reference} ({self.get_status_display()})'
+
+
+class Notification(models.Model):
+    """Notificação no sistema enviada ao cliente.
+
+    Criada quando o administrador muda a situação do pedido. Só faz sentido para
+    pedidos feitos com conta (``order.user``); pedidos sem login são avisados
+    apenas pelo WhatsApp/toast.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+    )
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='notifications',
+        null=True,
+        blank=True,
+    )
+    message = models.CharField('Mensagem', max_length=255)
+    is_read = models.BooleanField('Lida', default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'notificação'
+        verbose_name_plural = 'notificações'
+
+    def __str__(self):
+        return self.message
 
 
 class OrderItemOption(models.Model):

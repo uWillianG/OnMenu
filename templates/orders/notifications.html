@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Notificações | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="notif-page">
+
+    <div class="split-heading">
+      <h1 class="page-h1">
+        <svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Notificações
+      </h1>
+    </div>
+
+    {% if notifications %}
+      <ul class="notif-list">
+        {% for n in notifications %}
+          <li class="notif-item{% if not n.is_read %} is-unread{% endif %}">
+            {% if n.order %}
+              <a class="notif-link" href="{% url 'orders:track_order' n.order.order_number %}">
+                <span class="notif-message">{{ n.message }}</span>
+                <span class="notif-time">{{ n.created_at|date:"d/m/Y H:i" }}</span>
+              </a>
+            {% else %}
+              <div class="notif-link">
+                <span class="notif-message">{{ n.message }}</span>
+                <span class="notif-time">{{ n.created_at|date:"d/m/Y H:i" }}</span>
+              </div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty-state">
+        <h2>Nenhuma notificação</h2>
+        <p>Você verá aqui os avisos sobre a situação dos seus pedidos.</p>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from menu.models import Category, MenuItem, Restaurant
 
-from .models import CardPayment, City, Neighborhood, Order, PixPayment
+from .models import CardPayment, City, Neighborhood, Notification, Order, PixPayment
 
 
 class OrderViewsTests(TestCase):
@@ -204,6 +204,129 @@ class OrderViewsTests(TestCase):
         # O pedido não selecionado permanece inalterado.
         orders[2].refresh_from_db()
         self.assertEqual(orders[2].status, Order.Status.RECEIVED)
+
+    def _staff_login(self):
+        staff_user = User.objects.create_user(
+            username='staff', password='password', is_staff=True,
+        )
+        self.client.force_login(staff_user)
+        return staff_user
+
+    @patch('orders.services.notificacoes.whatsapp_service.enviar_texto')
+    def test_status_change_creates_notification_and_sends_whatsapp(self, mock_send):
+        customer = User.objects.create_user(username='ada', password='password')
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            user=customer,
+            customer_name='Ada Lovelace',
+            phone='41999990000',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CASH,
+            subtotal=Decimal('20.00'),
+            total=Decimal('20.00'),
+        )
+        self._staff_login()
+
+        self.client.post(
+            reverse('orders:staff_order_detail', args=[order.order_number]),
+            {'status': Order.Status.PREPARING},
+        )
+
+        # Notificação no sistema criada para o dono do pedido.
+        notif = Notification.objects.get(user=customer, order=order)
+        self.assertIn('Em preparo', notif.message)
+        self.assertFalse(notif.is_read)
+        # WhatsApp disparado com o telefone do pedido.
+        mock_send.assert_called_once()
+        self.assertEqual(mock_send.call_args.args[0], '41999990000')
+
+    @patch('orders.services.notificacoes.whatsapp_service.enviar_texto')
+    def test_no_notification_when_status_unchanged(self, mock_send):
+        customer = User.objects.create_user(username='ada', password='password')
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            user=customer,
+            customer_name='Ada',
+            phone='41999990000',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CASH,
+            subtotal=Decimal('20.00'),
+            total=Decimal('20.00'),
+            status=Order.Status.RECEIVED,
+        )
+        self._staff_login()
+
+        self.client.post(
+            reverse('orders:staff_order_detail', args=[order.order_number]),
+            {'status': Order.Status.RECEIVED},  # mesmo status
+        )
+
+        self.assertFalse(Notification.objects.exists())
+        mock_send.assert_not_called()
+
+    @patch('orders.services.notificacoes.whatsapp_service.enviar_texto')
+    def test_bulk_update_notifies_only_changed_orders(self, mock_send):
+        customer = User.objects.create_user(username='ada', password='password')
+        orders = [
+            Order.objects.create(
+                restaurant=self.restaurant,
+                user=customer,
+                customer_name=f'Cliente {i}',
+                phone='41999990000',
+                fulfillment_method=Order.FulfillmentMethod.PICKUP,
+                payment_method=Order.PaymentMethod.CASH,
+                subtotal=Decimal('20.00'),
+                total=Decimal('20.00'),
+                status=Order.Status.RECEIVED,
+            )
+            for i in range(2)
+        ]
+        # Um já está no status alvo: não deve notificar.
+        orders[1].status = Order.Status.PREPARING
+        orders[1].save(update_fields=['status'])
+        self._staff_login()
+
+        self.client.post(
+            reverse('orders:staff_orders_bulk_update'),
+            {
+                'order_numbers': [o.order_number for o in orders],
+                'status': Order.Status.PREPARING,
+                'next': reverse('orders:staff_order_list'),
+            },
+        )
+
+        # Só o pedido que realmente mudou gera notificação/WhatsApp.
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(mock_send.call_count, 1)
+
+    def test_notifications_page_lists_and_marks_read(self):
+        customer = User.objects.create_user(username='ada', password='password')
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            user=customer,
+            customer_name='Ada',
+            phone='41999990000',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CASH,
+            subtotal=Decimal('20.00'),
+            total=Decimal('20.00'),
+        )
+        Notification.objects.create(
+            user=customer, order=order, message='Seu pedido mudou.',
+        )
+        self.client.force_login(customer)
+
+        response = self.client.get(reverse('orders:notifications'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Seu pedido mudou.')
+        # Abrir a página marca como lidas.
+        self.assertFalse(
+            Notification.objects.filter(user=customer, is_read=False).exists()
+        )
+
+    def test_notifications_page_requires_login(self):
+        response = self.client.get(reverse('orders:notifications'))
+        self.assertEqual(response.status_code, 302)
 
 
 class PixPaymentTests(TestCase):

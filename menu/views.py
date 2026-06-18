@@ -2,6 +2,7 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, render
 
 from cart.cart import Cart
+from orders.selectors import get_tracked_active_orders
 
 from .models import MenuItem
 from .selectors import get_current_restaurant, is_restaurant_open
@@ -46,6 +47,7 @@ def menu_list(request):
             'business_hours': business_hours,
             'cart': cart,
             'cart_items': cart_items,
+            'tracked_orders': get_tracked_active_orders(request),
         },
     )
 

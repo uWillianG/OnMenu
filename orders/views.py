@@ -22,10 +22,21 @@ from django.views.decorators.http import require_http_methods
 from cart.cart import Cart
 from menu.selectors import get_current_restaurant, is_restaurant_open
 
+from . import selectors
 from .forms import CheckoutForm, OrderStatusForm
-from .models import CardPayment, City, Order, OrderItem, OrderItemOption, PixPayment
+from .models import (
+    CardPayment,
+    City,
+    Notification,
+    Order,
+    OrderItem,
+    OrderItemOption,
+    PixPayment,
+)
 from .services import mercadopago as mp_service
+from .services import notificacoes as notificacoes_service
 from .services import pedidos as pedidos_service
+from .services import whatsapp as whatsapp_service
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +75,8 @@ def checkout(request):
                 restaurant=restaurant,
                 user=request.user if request.user.is_authenticated else None,
             )
+            # Guarda o pedido na sessão para o acompanhamento na tela principal.
+            selectors.remember_order(request, order)
             cart.clear()
             # Pagamento Pix via modal: cria a cobrança e devolve o QR Code (JSON).
             if order.payment_method == Order.PaymentMethod.PIX and is_ajax:
@@ -498,6 +511,16 @@ def track_order(request, order_number):
     return render(request, 'orders/track_order.html', {'order': order})
 
 
+@login_required
+def notifications_list(request):
+    """Lista as notificações do cliente e marca as não lidas como lidas."""
+    notifications = list(
+        Notification.objects.filter(user=request.user).select_related('order')[:50]
+    )
+    Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    return render(request, 'orders/notifications.html', {'notifications': notifications})
+
+
 @staff_member_required
 def staff_order_list(request):
     orders = Order.objects.select_related('restaurant').prefetch_related('items')
@@ -613,10 +636,13 @@ def staff_orders_bulk_update(request):
     elif not order_numbers:
         messages.warning(request, 'Selecione ao menos um pedido.')
     else:
-        updated = Order.objects.filter(order_number__in=order_numbers).update(
-            status=new_status,
-            updated_at=timezone.now(),
-        )
+        selected = Order.objects.filter(order_number__in=order_numbers)
+        # Notifica apenas os pedidos cuja situação realmente muda.
+        changed = list(selected.exclude(status=new_status))
+        updated = selected.update(status=new_status, updated_at=timezone.now())
+        for order in changed:
+            order.status = new_status
+            notificacoes_service.notificar_status_pedido(order)
         label = Order.Status(new_status).label
         messages.success(
             request,
@@ -639,10 +665,16 @@ def staff_order_detail(request, order_number):
         order_number=order_number,
     )
 
+    # Capturado antes de validar o form: form.is_valid() já aplica o novo
+    # status na instância (via _post_clean), então leríamos o valor novo.
+    previous_status = order.status
+
     if request.method == 'POST':
         form = OrderStatusForm(request.POST, instance=order)
         if form.is_valid():
             form.save()
+            if order.status != previous_status:
+                notificacoes_service.notificar_status_pedido(order)
             messages.success(request, f'Status do pedido {order.order_number} atualizado.')
             url = reverse('orders:staff_order_detail', args=[order.order_number])
             return redirect(f'{url}?updated=1')
@@ -655,6 +687,10 @@ def staff_order_detail(request, order_number):
         {
             'order': order,
             'form': form,
+            'wa_customer_url': whatsapp_service.montar_link_wame(
+                order.phone, notificacoes_service.mensagem_status(order)
+            ),
+            'WHATSAPP_MOCK': settings.WHATSAPP_MOCK,
         },
     )
 

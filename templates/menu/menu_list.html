@@ -31,6 +31,37 @@
     </div>
   </section>
 
+  {# ── Acompanhamento de pedidos ativos ── #}
+  {% if tracked_orders %}
+    <section class="track-block" aria-label="Acompanhamento de pedidos">
+      {% for o in tracked_orders %}
+        <a class="track-block-card" href="{% url 'orders:track_order' o.order_number %}">
+          <span class="track-block-head">
+            <span class="track-block-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            </span>
+            <span class="track-block-id">
+              <span class="track-block-eyebrow">Acompanhe seu pedido</span>
+              <span class="track-block-num">{{ o.order_number }}</span>
+            </span>
+            <span class="status-pill {{ o.status }}">{{ o.get_status_display }}</span>
+          </span>
+
+          <span class="track-progress" aria-hidden="true">
+            <span class="track-progress-fill" style="width:{{ o.status_percent }}%"></span>
+          </span>
+
+          <span class="track-block-foot">
+            <span class="track-block-hint">{{ o.tracking_hint }}</span>
+            <span class="track-block-cta">Ver detalhes
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+          </span>
+        </a>
+      {% endfor %}
+    </section>
+  {% endif %}
+
   {# ── Business hours ── #}
   {% if business_hours %}
     <details class="hours-details">

@@ -67,6 +67,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'cart.context_processors.cart_summary',
+                'orders.context_processors.notifications',
             ],
         },
     },
@@ -166,6 +167,18 @@ MERCADOPAGO_MOCK = not MERCADOPAGO_ACCESS_TOKEN
 PIX_EXPIRATION_MINUTES = 30
 # E-mail do pagador enviado ao Mercado Pago (não coletamos e-mail no checkout).
 PIX_DEFAULT_PAYER_EMAIL = os.environ.get('PIX_DEFAULT_PAYER_EMAIL', 'comprador@onmenu.com.br')
+
+# --- WhatsApp (Cloud API) ---
+# Token e phone number id da WhatsApp Cloud API (Meta). Sem token/phone id, o
+# sistema roda em modo "mock": as mensagens são apenas registradas no log, sem
+# envio real — análogo ao modo mock do Mercado Pago.
+WHATSAPP_TOKEN = os.environ.get('WHATSAPP_TOKEN', '')
+WHATSAPP_PHONE_ID = os.environ.get('WHATSAPP_PHONE_ID', '')
+WHATSAPP_API_VERSION = os.environ.get('WHATSAPP_API_VERSION', 'v21.0')
+# DDI adicionado a telefones sem código do país (Brasil = 55).
+WHATSAPP_DEFAULT_COUNTRY_CODE = os.environ.get('WHATSAPP_DEFAULT_COUNTRY_CODE', '55')
+# Mock ligado automaticamente quando faltam credenciais.
+WHATSAPP_MOCK = not (WHATSAPP_TOKEN and WHATSAPP_PHONE_ID)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

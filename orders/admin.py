@@ -4,11 +4,20 @@ from .models import (
     CardPayment,
     City,
     Neighborhood,
+    Notification,
     Order,
     OrderItem,
     OrderItemOption,
     PixPayment,
 )
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('message', 'user', 'order', 'is_read', 'created_at')
+    list_filter = ('is_read', 'created_at')
+    search_fields = ('message', 'user__username', 'order__order_number')
+    readonly_fields = ('created_at',)
 
 
 class NeighborhoodInline(admin.TabularInline):

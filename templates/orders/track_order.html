@@ -1,10 +1,14 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Pedido {{ order.order_number }} | OnMenu{% endblock %}
 
 {% block content %}
 <div class="page-content">
-  <div class="track-page">
+  <div class="track-page"
+       data-order-notifier
+       data-order-number="{{ order.order_number }}"
+       data-order-status="{{ order.status }}">
 
     <div class="track-hero">
       <p class="eyebrow">Acompanhamento</p>
@@ -15,30 +19,41 @@
       {% with s=order.status %}
       <ol class="track-steps" id="track-steps">
         <li class="track-step {% if s != 'cancelled' %}done{% endif %}" data-status="received">
-          <div class="step-dot">✔</div>
+          <div class="step-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
           <span class="step-label">Recebido</span>
         </li>
         <li class="track-step {% if s == 'preparing' or s == 'out_for_delivery' or s == 'delivered' %}done{% endif %}{% if s == 'preparing' %} current{% endif %}" data-status="preparing">
-          <div class="step-dot">🍳</div>
+          <div class="step-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 13.87V20a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6.13"/><path d="M18 14a4 4 0 0 0 0-8 5 5 0 0 0-12 0 4 4 0 0 0 0 8"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+          </div>
           <span class="step-label">Preparando</span>
         </li>
         {% if order.fulfillment_method == 'delivery' %}
         <li class="track-step {% if s == 'out_for_delivery' or s == 'delivered' %}done{% endif %}{% if s == 'out_for_delivery' %} current{% endif %}" data-status="out_for_delivery">
-          <div class="step-dot">🛵</div>
+          <div class="step-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          </div>
           <span class="step-label">Saiu para entrega</span>
         </li>
         {% endif %}
         <li class="track-step {% if s == 'delivered' %}done current{% endif %}" data-status="delivered">
-          <div class="step-dot">🎉</div>
+          <div class="step-dot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
           <span class="step-label">{% if order.fulfillment_method == 'delivery' %}Entregue{% else %}Pronto para retirada{% endif %}</span>
         </li>
       </ol>
       {% endwith %}
 
       {% if order.status == 'cancelled' %}
-        <p class="cancelled-notice">❌ Este pedido foi cancelado.</p>
+        <p class="cancelled-notice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          Este pedido foi cancelado.
+        </p>
       {% else %}
-        <p class="track-note" id="track-note">Atualizando automaticamente a cada 30 segundos…</p>
+        <p class="track-note" id="track-note">Avisaremos aqui assim que a situação mudar…</p>
       {% endif %}
     </div>
 
@@ -51,13 +66,14 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if order.status != 'delivered' and order.status != 'cancelled' %}
+<script src="{% static 'js/order-status-notifier.js' %}?v=1"></script>
 <script>
+// Avança o stepper quando o notificador detecta a mudança de situação.
 (function () {
-  const num   = "{{ order.order_number }}";
   const STEPS = ['received','preparing','out_for_delivery','delivered'];
 
   function applyStatus(status) {
+    if (status === 'cancelled') { window.location.reload(); return; }
     document.querySelectorAll('.track-step').forEach((el) => {
       el.classList.remove('done','current');
       const idx = STEPS.indexOf(el.dataset.status);
@@ -65,24 +81,15 @@
       if (idx <= cur) el.classList.add('done');
       if (idx === cur) el.classList.add('current');
     });
-    if (status === 'delivered') {
-      const note = document.getElementById('track-note');
-      if (note) note.textContent = '🎉 Pedido entregue!';
+    const note = document.getElementById('track-note');
+    if (note && status === 'delivered') {
+      note.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>Pedido entregue!';
     }
   }
 
-  async function poll() {
-    try {
-      const r = await fetch(`/orders/track/${num}/?json=1`);
-      if (!r.ok) return;
-      const d = await r.json();
-      applyStatus(d.status);
-      if (d.status !== 'delivered' && d.status !== 'cancelled') setTimeout(poll, 30000);
-    } catch (_) { setTimeout(poll, 30000); }
-  }
-
-  setTimeout(poll, 30000);
+  document.addEventListener('order-status-changed', (e) => {
+    if (e.detail) applyStatus(e.detail.status);
+  });
 })();
 </script>
-{% endif %}
 {% endblock %}
