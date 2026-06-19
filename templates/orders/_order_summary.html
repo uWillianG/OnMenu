@@ -2,7 +2,7 @@
 <div class="order-summary">
 
   <div class="order-summary-head">
-    <span class="status-pill {{ order.status }}">{{ order.get_status_display }}</span>
+    <span class="status-pill {{ order.status }}">{{ order.status_display }}</span>
     <h2 class="order-summary-title">{{ order.order_number }}</h2>
     <p class="order-summary-date">{{ order.created_at|date:"d/m/Y · H:i" }}</p>
   </div>

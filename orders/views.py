@@ -506,7 +506,7 @@ def track_order(request, order_number):
     if request.GET.get('json'):
         return JsonResponse({
             'status': order.status,
-            'status_display': order.get_status_display(),
+            'status_display': order.status_display,
         })
     return render(request, 'orders/track_order.html', {'order': order})
 
@@ -573,6 +573,7 @@ def staff_order_list(request):
                 status_filter, payment_filter, fulfillment_filter, date_filter,
             ]),
             'status_choices': Order.Status.choices,
+            'bulk_status_choices': Order.bulk_status_choices(),
             'payment_choices': Order.PaymentMethod.choices,
             'fulfillment_choices': Order.FulfillmentMethod.choices,
         },

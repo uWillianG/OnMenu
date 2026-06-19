@@ -93,7 +93,7 @@
     {% for order in orders %}
       <article class="receipt">
         <h1>{{ order.restaurant.name }}</h1>
-        <div class="sub">Comanda · {{ order.get_status_display }}</div>
+        <div class="sub">Comanda · {{ order.status_display }}</div>
         <div class="order-no">{{ order.order_number }}</div>
         <div class="sub">{{ order.created_at|date:"d/m/Y H:i" }}</div>
 

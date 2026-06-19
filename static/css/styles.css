@@ -696,34 +696,60 @@ a.notif-link:hover .notif-message { color: var(--primary); }
 }
 
 /* ── Category accordion ─────────────────────────────────────── */
+/* Sections stack into a single card — adjacent borders act as separators */
 .menu-section {
-  margin-bottom: 4px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-top: none;
   background: var(--surface);
   padding: 0 18px;
-  transition: border-color .15s, box-shadow .15s;
 }
 
-.menu-section[open] {
-  padding-bottom: 18px;
-  box-shadow: var(--shadow-sm);
+.menu-section:first-of-type {
+  border-top: 1px solid var(--border);
+  border-top-left-radius: var(--radius);
+  border-top-right-radius: var(--radius);
 }
+.menu-section:last-of-type {
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+}
+
+.menu-section[open] { padding-bottom: 18px; }
 
 .menu-section > summary {
   cursor: pointer;
   list-style: none;
-  padding: 6px 4px 14px;
+  padding: 14px 4px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -.4px;
   user-select: none;
+  transition: color .15s;
 }
 
 .menu-section > summary::-webkit-details-marker { display: none; }
+
+/* Leading accent bar — neutral when closed, brand red when open */
+.menu-section > summary::before {
+  content: '';
+  width: 4px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  flex-shrink: 0;
+  transition: background .15s, height .2s;
+}
+.menu-section[open] > summary::before { background: var(--primary); height: 25px; }
+
+.menu-section:not([open]) > summary:hover { color: var(--primary); }
+.menu-section:not([open]) > summary:hover::before { background: var(--primary); }
+.menu-section:not([open]) > summary:hover .section-chevron {
+  border-color: var(--primary);
+  color: var(--primary);
+}
 .menu-section.featured {
   border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
   background: color-mix(in srgb, var(--primary) 3.5%, var(--surface));
@@ -763,7 +789,10 @@ a.notif-link:hover .notif-message { color: var(--primary); }
   margin-left: auto;
 }
 
-.section-body { padding: 2px 0 4px; }
+.section-body {
+  padding: 14px 0 4px;
+  border-top: 1px solid var(--border);
+}
 
 /* ── Product Card (photo-forward) ───────────────────────────── */
 .product-list {
@@ -1273,6 +1302,35 @@ a.notif-link:hover .notif-message { color: var(--primary); }
 .btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
 .btn-secondary:active { transform: scale(.98); }
 
+/* Discrete back navigation link with a sliding arrow */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px 9px 13px;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  font-size: .9rem;
+  text-decoration: none;
+  transition: border-color .15s, color .15s, background .15s, transform .12s;
+}
+.back-link svg {
+  width: 18px;
+  height: 18px;
+  transition: transform .15s;
+}
+.back-link:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: var(--surface-2);
+}
+.back-link:hover svg { transform: translateX(-3px); }
+.back-link:active { transform: scale(.98); }
+
 .btn-danger {
   background: #fff0f2;
   color: var(--warning);
@@ -1289,7 +1347,8 @@ a.notif-link:hover .notif-message { color: var(--primary); }
   padding: 28px 0 90px;
 }
 
-.page-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.6px; margin-bottom: 22px; }
+.page-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.6px; margin-bottom: 22px; display: flex; align-items: center; gap: 11px; }
+.page-title-ico { width: 26px; height: 26px; color: var(--primary); flex: none; }
 
 .cart-layout { display: grid; gap: 16px; }
 .cart-lines  { display: grid; gap: 12px; }
@@ -2555,7 +2614,8 @@ body.has-bulk-bar { padding-bottom: 96px; }
 .auth-forgot a:hover { color: var(--primary); text-decoration: underline; }
 
 /* ── Perfil ─────────────────────────────────────────────────── */
-.profile-page .page-h1 {
+.profile-page .page-h1,
+.order-history-page .page-h1 {
   display: flex;
   align-items: center;
   gap: 10px;

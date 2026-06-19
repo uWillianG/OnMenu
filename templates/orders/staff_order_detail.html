@@ -6,12 +6,16 @@
 <div class="page-content">
   <div class="staff-page">
 
+    <a class="back-link" href="{% url 'orders:staff_order_list' %}" style="justify-self:start;margin-bottom:16px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      Todos os pedidos
+    </a>
+
     <div class="split-heading">
       <div>
         <p style="font-size:.8rem;font-weight:700;text-transform:uppercase;color:var(--primary);margin-bottom:4px">Pedido</p>
         <h1 class="page-h1">{{ order.order_number }}</h1>
       </div>
-      <a class="btn-secondary" href="{% url 'orders:staff_order_list' %}">← Todos os pedidos</a>
     </div>
 
     <div class="staff-detail-layout">
@@ -78,7 +82,7 @@
         <div class="form-field">
           <label class="form-label" for="{{ form.status.id_for_label }}">Status atual</label>
           <select class="form-select" id="{{ form.status.id_for_label }}" name="status">
-            {% for value, label in form.fields.status.choices %}
+            {% for value, label in order.status_choices %}
               <option value="{{ value }}"{% if value == order.status %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>

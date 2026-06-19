@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def mensagem_status(order) -> str:
-    return f'Seu pedido {order.order_number} agora está: {order.get_status_display()}.'
+    return f'Seu pedido {order.order_number} agora está: {order.status_display}.'
 
 
 def notificar_status_pedido(order) -> None:

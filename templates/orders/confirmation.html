@@ -13,7 +13,7 @@
     <div class="confirmation-hero">
       <p class="eyebrow">✅ Pedido recebido</p>
       <h1>{{ order.order_number }}</h1>
-      <p class="status-text">Status: <strong data-order-status-text>{{ order.get_status_display }}</strong></p>
+      <p class="status-text">Status: <strong data-order-status-text>{{ order.status_display }}</strong></p>
       <p class="status-text">
         Pagamento:
         <span class="pay-badge {% if order.payment_status == 'paid' %}is-paid{% elif order.payment_status == 'rejected' %}is-rejected{% elif order.payment_status == 'in_process' %}is-process{% endif %}">

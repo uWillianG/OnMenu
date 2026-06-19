@@ -8,7 +8,8 @@
   <div class="track-page"
        data-order-notifier
        data-order-number="{{ order.order_number }}"
-       data-order-status="{{ order.status }}">
+       data-order-status="{{ order.status }}"
+       data-fulfillment="{{ order.fulfillment_method }}">
 
     <div class="track-hero">
       <p class="eyebrow">Acompanhamento</p>
@@ -30,19 +31,21 @@
           </div>
           <span class="step-label">Preparando</span>
         </li>
-        {% if order.fulfillment_method == 'delivery' %}
         <li class="track-step {% if s == 'out_for_delivery' or s == 'delivered' %}done{% endif %}{% if s == 'out_for_delivery' %} current{% endif %}" data-status="out_for_delivery">
           <div class="step-dot">
+            {% if order.fulfillment_method == 'delivery' %}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            {% else %}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            {% endif %}
           </div>
-          <span class="step-label">Saiu para entrega</span>
+          <span class="step-label">{% if order.fulfillment_method == 'delivery' %}Saiu para entrega{% else %}Pronto p/ retirada{% endif %}</span>
         </li>
-        {% endif %}
         <li class="track-step {% if s == 'delivered' %}done current{% endif %}" data-status="delivered">
           <div class="step-dot">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
-          <span class="step-label">{% if order.fulfillment_method == 'delivery' %}Entregue{% else %}Pronto para retirada{% endif %}</span>
+          <span class="step-label">{% if order.fulfillment_method == 'delivery' %}Entregue{% else %}Retirado{% endif %}</span>
         </li>
       </ol>
       {% endwith %}
@@ -58,7 +61,10 @@
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <a class="btn-secondary" href="{% url 'menu:menu_list' %}">← Voltar ao cardápio</a>
+      <a class="back-link" href="{% url 'menu:menu_list' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Voltar ao cardápio
+      </a>
     </div>
 
   </div>
@@ -83,7 +89,9 @@
     });
     const note = document.getElementById('track-note');
     if (note && status === 'delivered') {
-      note.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>Pedido entregue!';
+      const isPickup = document.querySelector('[data-order-notifier]')?.dataset.fulfillment === 'pickup';
+      const label = isPickup ? 'Pedido retirado!' : 'Pedido entregue!';
+      note.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>' + label;
     }
   }
 

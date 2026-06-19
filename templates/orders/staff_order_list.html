@@ -81,7 +81,7 @@
         </div>
         <select class="bulk-select" id="bulk-status" name="status" required aria-label="Nova situação">
           <option value="">Alterar situação para…</option>
-          {% for value, label in status_choices %}
+          {% for value, label in bulk_status_choices %}
             <option value="{{ value }}">{{ label }}</option>
           {% endfor %}
         </select>

@@ -185,16 +185,59 @@ class Order(models.Model):
         """Pedido ainda em andamento (não entregue nem cancelado)."""
         return self.status in self.ACTIVE_STATUSES
 
+    def label_for_status(self, status):
+        """Rótulo do status conforme o método de entrega.
+
+        Em pedidos para **retirada**, a etapa ``out_for_delivery`` representa o
+        pedido pronto no balcão e ``delivered`` representa o pedido já retirado —
+        por isso aparecem como "Pronto p/ retirada" e "Retirado" em vez de
+        "Saiu para entrega" e "Entregue".
+        """
+        status = str(status)
+        if self.fulfillment_method == self.FulfillmentMethod.PICKUP:
+            if status == self.Status.OUT_FOR_DELIVERY:
+                return 'Pronto p/ retirada'
+            if status == self.Status.DELIVERED:
+                return 'Retirado'
+        return self.Status(status).label
+
+    @property
+    def status_display(self):
+        """Rótulo do status atual, ajustado para retirada."""
+        return self.label_for_status(self.status)
+
+    @property
+    def status_choices(self):
+        """Opções de status para o seletor do painel, com rótulos ajustados."""
+        return [(value, self.label_for_status(value)) for value, _ in self.Status.choices]
+
+    @classmethod
+    def bulk_status_choices(cls):
+        """Opções de status para ações em lote no painel.
+
+        Como o lote pode misturar entregas e retiradas, lista os dois rótulos
+        das etapas que mudam de nome na retirada (``out_for_delivery`` e
+        ``delivered``), apontando ambos para o mesmo valor de status.
+        """
+        extra = {
+            cls.Status.OUT_FOR_DELIVERY: 'Pronto p/ retirada',
+            cls.Status.DELIVERED: 'Retirado',
+        }
+        choices = []
+        for value, label in cls.Status.choices:
+            choices.append((value, label))
+            if value in extra:
+                choices.append((value, extra[value]))
+        return choices
+
     def _tracking_steps(self):
-        """Etapas do acompanhamento conforme entrega ou retirada."""
-        if self.fulfillment_method == self.FulfillmentMethod.DELIVERY:
-            return [
-                self.Status.RECEIVED,
-                self.Status.PREPARING,
-                self.Status.OUT_FOR_DELIVERY,
-                self.Status.DELIVERED,
-            ]
-        return [self.Status.RECEIVED, self.Status.PREPARING, self.Status.DELIVERED]
+        """Etapas do acompanhamento (iguais para entrega e retirada)."""
+        return [
+            self.Status.RECEIVED,
+            self.Status.PREPARING,
+            self.Status.OUT_FOR_DELIVERY,
+            self.Status.DELIVERED,
+        ]
 
     @property
     def status_percent(self):
@@ -207,11 +250,18 @@ class Order(models.Model):
     @property
     def tracking_hint(self):
         """Frase amigável sobre a situação atual do pedido."""
+        is_pickup = self.fulfillment_method == self.FulfillmentMethod.PICKUP
         hints = {
             self.Status.RECEIVED: 'Pedido recebido — já vamos começar.',
             self.Status.PREPARING: 'Seu pedido está sendo preparado.',
-            self.Status.OUT_FOR_DELIVERY: 'Saiu para entrega, chega já!',
-            self.Status.DELIVERED: 'Pedido concluído. Bom apetite!',
+            self.Status.OUT_FOR_DELIVERY: (
+                'Seu pedido está pronto para retirada!' if is_pickup
+                else 'Saiu para entrega, chega já!'
+            ),
+            self.Status.DELIVERED: (
+                'Pedido retirado. Bom apetite!' if is_pickup
+                else 'Pedido concluído. Bom apetite!'
+            ),
             self.Status.CANCELLED: 'Pedido cancelado.',
         }
         return hints.get(self.status, '')
