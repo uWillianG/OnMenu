@@ -13,8 +13,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carrega variáveis de ambiente do arquivo .env (SMTP, Mercado Pago, etc.).
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -149,13 +154,24 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# E-mail: sem SMTP configurado, os e-mails (ex.: recuperação de senha) são
-# impressos no console do runserver — análogo ao modo "mock" dos pagamentos.
-EMAIL_BACKEND = os.environ.get(
-    'EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend'
+# E-mail: com SMTP configurado no .env (EMAIL_HOST_USER/PASSWORD), os e-mails de
+# recuperação de senha são enviados de verdade. Sem essas credenciais, o backend
+# cai para o console do runserver — análogo ao modo "mock" dos pagamentos.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('1', 'true', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+
+# Backend padrão: SMTP quando há credenciais, senão imprime no console.
+_default_email_backend = (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+    else 'django.core.mail.backends.console.EmailBackend'
 )
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', _default_email_backend)
 DEFAULT_FROM_EMAIL = os.environ.get(
-    'DEFAULT_FROM_EMAIL', 'OnMenu <nao-responder@onmenu.com.br>'
+    'DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'OnMenu <nao-responder@onmenu.com.br>'
 )
 
 # --- Mercado Pago / Pix ---

@@ -13,7 +13,7 @@ botão de exibir/ocultar; o campo password1 ganha o checklist de requisitos.{% e
       </button>
     </div>
 
-    {% if field.name == 'password1' %}
+    {% if field.name == 'password1' or field.name == 'new_password1' %}
       <ul class="password-reqs" id="password-reqs" aria-live="polite">
         <li data-req="length">Mínimo de 8 caracteres</li>
         <li data-req="upper">Uma letra maiúscula</li>

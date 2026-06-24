@@ -53,7 +53,7 @@
   });
 
   // ── Validação da senha em tempo real ─────────────────────────
-  var pwd = document.getElementById('id_password1');
+  var pwd = document.getElementById('id_password1') || document.getElementById('id_new_password1');
   var reqs = document.getElementById('password-reqs');
   if (!pwd || !reqs) return;
 

@@ -20,9 +20,11 @@ urlpatterns = [
         auth_views.PasswordResetView.as_view(
             template_name='registration/password_reset_form.html',
             email_template_name='registration/password_reset_email.html',
+            html_email_template_name='registration/password_reset_email_html.html',
             subject_template_name='registration/password_reset_subject.txt',
             form_class=StyledPasswordResetForm,
             success_url=reverse_lazy('accounts:password_reset_done'),
+            extra_context={'hide_chrome': True},
         ),
         name='password_reset',
     ),
@@ -30,6 +32,7 @@ urlpatterns = [
         'password-reset/done/',
         auth_views.PasswordResetDoneView.as_view(
             template_name='registration/password_reset_done.html',
+            extra_context={'hide_chrome': True},
         ),
         name='password_reset_done',
     ),
@@ -39,6 +42,7 @@ urlpatterns = [
             template_name='registration/password_reset_confirm.html',
             form_class=StyledSetPasswordForm,
             success_url=reverse_lazy('accounts:password_reset_complete'),
+            extra_context={'hide_chrome': True},
         ),
         name='password_reset_confirm',
     ),
@@ -46,6 +50,7 @@ urlpatterns = [
         'reset/done/',
         auth_views.PasswordResetCompleteView.as_view(
             template_name='registration/password_reset_complete.html',
+            extra_context={'hide_chrome': True},
         ),
         name='password_reset_complete',
     ),

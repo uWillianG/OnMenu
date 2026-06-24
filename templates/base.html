@@ -15,12 +15,15 @@
 
   <header class="site-header">
     <div class="header-left">
+      {% if not hide_chrome %}
       <button class="menu-toggle" id="menu-toggle" type="button"
               aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
+      {% endif %}
       <a class="brand" href="{% url 'menu:menu_list' %}">OnMenu</a>
     </div>
+    {% if not hide_chrome %}
     <div style="display:flex;align-items:center;gap:10px">
       {% if request.user.is_authenticated %}
         <a class="bell-btn" href="{% url 'orders:notifications' %}" aria-label="Notificações">
@@ -36,8 +39,10 @@
         {% endif %}
       </a>
     </div>
+    {% endif %}
   </header>
 
+  {% if not hide_chrome %}
   <div class="sidebar-overlay" id="sidebar-overlay" hidden></div>
   <aside class="sidebar" id="sidebar" aria-hidden="true" aria-label="Menu de navegação">
     <div class="sidebar-head">
@@ -96,6 +101,7 @@
       {% endif %}
     </nav>
   </aside>
+  {% endif %}
 
   {% if messages %}
     <div class="messages">
@@ -107,7 +113,7 @@
 
   {% block content %}{% endblock %}
 
-  {% if cart_item_count > 0 and request.resolver_match.view_name != 'cart:cart_detail' and request.resolver_match.view_name != 'orders:checkout' %}
+  {% if not hide_chrome and cart_item_count > 0 and request.resolver_match.view_name != 'cart:cart_detail' and request.resolver_match.view_name != 'orders:checkout' %}
     <a class="float-cart" href="{% url 'cart:cart_detail' %}">
       <span class="float-cart-label">🛒 Ver carrinho</span>
       <span class="float-cart-count">{{ cart_item_count }} ite{% if cart_item_count == 1 %}m{% else %}ns{% endif %}</span>
