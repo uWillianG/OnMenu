@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
@@ -6,10 +9,6 @@ from django.contrib.auth.forms import (
     UserCreationForm,
 )
 from django.contrib.auth.models import User
-from django.contrib.auth.validators import (
-    ASCIIUsernameValidator,
-    UnicodeUsernameValidator,
-)
 
 from orders.models import City, Neighborhood
 
@@ -19,6 +18,59 @@ PASSWORD_HELP_TEXT = (
     'Mínimo de 8 caracteres, com letra maiúscula, minúscula, '
     'número e caractere especial.'
 )
+
+
+def _only_digits(value):
+    return ''.join(ch for ch in (value or '') if ch.isdigit())
+
+
+def _strip_accents(text):
+    nfkd = unicodedata.normalize('NFKD', text)
+    return ''.join(ch for ch in nfkd if not unicodedata.combining(ch))
+
+
+def _generate_username(first_name, last_name):
+    """Gera o @handle do cliente: '@' + primeiro + último nome (sem acentos).
+
+    Em caso de duplicata, anexa um número incremental (@joaosilva2).
+    """
+    base = re.sub(r'[^a-z0-9]', '', _strip_accents(f'{first_name}{last_name}').lower())
+    handle = '@' + (base or 'cliente')
+    candidate = handle
+    suffix = 2
+    while User.objects.filter(username=candidate).exists():
+        candidate = f'{handle}{suffix}'
+        suffix += 1
+    return candidate
+
+
+def _split_full_name(value):
+    """Normaliza o nome completo e separa em (primeiro nome, sobrenome)."""
+    parts = (value or '').split()
+    first = parts[0] if parts else ''
+    last = ' '.join(parts[1:]) if len(parts) > 1 else ''
+    return first, last
+
+
+def _cpf_field():
+    return forms.CharField(
+        label='CPF',
+        max_length=14,
+        widget=forms.TextInput(attrs={
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'maxlength': '14',
+            'placeholder': '000.000.000-00',
+            'data-mask': 'cpf',
+        }),
+    )
+
+
+def _clean_full_name(value):
+    name = ' '.join((value or '').split())
+    if len(name.split()) < 2:
+        raise forms.ValidationError('Informe o nome e o sobrenome.')
+    return name
 
 
 def _phone_field():
@@ -54,22 +106,34 @@ class StyledFormMixin:
 
 
 class LoginForm(StyledFormMixin, AuthenticationForm):
-    """Login por nome de usuário, com rótulos em pt-BR."""
+    """Login por e-mail (clientes) ou nome de usuário (equipe), em pt-BR."""
 
     error_messages = {
-        'invalid_login': 'Usuário ou senha incorretos. Tente novamente.',
+        'invalid_login': 'E-mail/usuário ou senha incorretos. Tente novamente.',
         'inactive': 'Esta conta está inativa.',
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['username'].label = 'Usuário'
+        self.fields['username'].label = 'E-mail ou usuário'
         self.fields['password'].label = 'Senha'
 
 
 class SignupForm(StyledFormMixin, UserCreationForm):
-    """Cadastro de conta de cliente com e-mail."""
+    """Cadastro de cliente: nome completo + e-mail + CPF.
 
+    O nome de usuário (``username``) é gerado automaticamente a partir do nome
+    (``@primeiroúltimo``) e o cliente acessa o sistema pelo e-mail. O CPF é
+    obrigatório, gravado no Profile e nunca exibido depois.
+    """
+
+    full_name = forms.CharField(
+        label='Nome completo',
+        max_length=120,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'name', 'placeholder': 'Ex: João da Silva',
+        }),
+    )
     email = forms.EmailField(
         label='E-mail',
         required=True,
@@ -77,40 +141,23 @@ class SignupForm(StyledFormMixin, UserCreationForm):
         widget=forms.EmailInput(attrs={'autocomplete': 'email'}),
     )
     phone = _phone_field()
+    cpf = _cpf_field()
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ('username', 'email', 'phone')
+        # 'username' é gerado no save(); só o e-mail vem do formulário para o User.
+        fields = ('email',)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        username = self.fields['username']
-        username.label = 'Usuário'
-        username.help_text = 'Até 150 caracteres.'
-        # Sem restrição de caracteres: mantém apenas o limite de tamanho.
-        username.validators = [
-            v for v in username.validators
-            if not isinstance(v, (UnicodeUsernameValidator, ASCIIUsernameValidator))
-        ]
-
+        self.order_fields(['full_name', 'email', 'phone', 'cpf', 'password1', 'password2'])
         self.fields['password1'].label = 'Senha'
         self.fields['password1'].help_text = PASSWORD_HELP_TEXT
         self.fields['password2'].label = 'Confirme a senha'
         self.fields['password2'].help_text = 'Repita a senha para conferência.'
 
-    def _post_clean(self):
-        super()._post_clean()
-        # O UserCreationForm é um ModelForm: o full_clean() da instância
-        # reaplica o validador de caracteres do campo username. Descartamos
-        # apenas esse erro de regex (code 'invalid'), preservando o limite de
-        # tamanho ('max_length') e a checagem de unicidade.
-        field_errors = self._errors.get('username')
-        if field_errors:
-            kept = [e for e in field_errors.as_data() if e.code != 'invalid']
-            if kept:
-                self._errors['username'] = self.error_class(kept)
-            else:
-                del self._errors['username']
+    def clean_full_name(self):
+        return _clean_full_name(self.cleaned_data.get('full_name'))
 
     def clean_email(self):
         email = self.cleaned_data['email']
@@ -121,21 +168,46 @@ class SignupForm(StyledFormMixin, UserCreationForm):
     def clean_phone(self):
         return _clean_phone(self.cleaned_data.get('phone'))
 
+    def clean_cpf(self):
+        digits = _only_digits(self.cleaned_data.get('cpf'))
+        if len(digits) != 11:
+            raise forms.ValidationError('CPF inválido.')
+        if Profile.objects.filter(cpf=digits).exists():
+            raise forms.ValidationError('Já existe uma conta com este CPF.')
+        return digits
+
     def save(self, commit=True):
         user = super().save(commit=False)
+        parts = self.cleaned_data['full_name'].split()
+        user.first_name = parts[0]
+        user.last_name = ' '.join(parts[1:])
         user.email = self.cleaned_data['email']
+        # @handle usa o primeiro e o ÚLTIMO nome (ignora nomes do meio).
+        user.username = _generate_username(parts[0], parts[-1])
         if commit:
             user.save()
-            # O signal post_save já cria o Profile; só gravamos o telefone.
+            # O signal post_save já cria o Profile; gravamos telefone e CPF.
             profile, _ = Profile.objects.get_or_create(user=user)
             profile.phone = self.cleaned_data['phone']
+            profile.cpf = self.cleaned_data['cpf']
             profile.save()
         return user
 
 
 class ProfileForm(StyledFormMixin, forms.ModelForm):
-    """Edição dos dados da conta do cliente no perfil."""
+    """Edição dos dados da conta do cliente no perfil.
 
+    O nome de usuário (@handle) é gerado no cadastro e não é editável aqui; o
+    cliente edita o nome completo, o e-mail e o telefone.
+    """
+
+    full_name = forms.CharField(
+        label='Nome completo',
+        max_length=120,
+        widget=forms.TextInput(attrs={
+            'autocomplete': 'name', 'placeholder': 'Ex: João da Silva',
+        }),
+    )
     email = forms.EmailField(
         label='E-mail',
         required=True,
@@ -145,47 +217,24 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'email')
+        fields = ('email',)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['username'].label = 'Usuário'
-        self.fields['username'].help_text = 'Até 150 caracteres.'
-        # Pré-preenche o telefone a partir do Profile.
+        self.order_fields(['full_name', 'email', 'phone'])
+        # Pré-preenche nome e telefone a partir da conta/Profile.
         if self.instance and self.instance.pk:
+            self.fields['full_name'].initial = self.instance.get_full_name()
             try:
                 self.fields['phone'].initial = self.instance.profile.phone
             except Profile.DoesNotExist:
                 self.fields['phone'].initial = ''
-        # Mesma política do cadastro: sem restrição de caracteres no usuário.
-        self.fields['username'].validators = [
-            v for v in self.fields['username'].validators
-            if not isinstance(v, (UnicodeUsernameValidator, ASCIIUsernameValidator))
-        ]
+
+    def clean_full_name(self):
+        return _clean_full_name(self.cleaned_data.get('full_name'))
 
     def clean_phone(self):
         return _clean_phone(self.cleaned_data.get('phone'))
-
-    def save(self, commit=True):
-        user = super().save(commit=commit)
-        if commit:
-            profile, _ = Profile.objects.get_or_create(user=user)
-            profile.phone = self.cleaned_data['phone']
-            profile.save()
-        return user
-
-    def _post_clean(self):
-        super()._post_clean()
-        # O full_clean() da instância reaplica o validador de caracteres do
-        # username; descartamos só esse erro de regex (code 'invalid'),
-        # preservando limite de tamanho e unicidade.
-        field_errors = self._errors.get('username')
-        if field_errors:
-            kept = [e for e in field_errors.as_data() if e.code != 'invalid']
-            if kept:
-                self._errors['username'] = self.error_class(kept)
-            else:
-                del self._errors['username']
 
     def clean_email(self):
         email = self.cleaned_data['email']
@@ -193,6 +242,18 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
         if taken.exists():
             raise forms.ValidationError('Já existe uma conta com este e-mail.')
         return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        first, last = _split_full_name(self.cleaned_data['full_name'])
+        user.first_name = first
+        user.last_name = last
+        if commit:
+            user.save()
+            profile, _ = Profile.objects.get_or_create(user=user)
+            profile.phone = self.cleaned_data['phone']
+            profile.save()
+        return user
 
 
 class AddressForm(forms.ModelForm):

@@ -14,6 +14,10 @@ class Profile(models.Model):
     )
     phone = models.CharField('Telefone', max_length=40, blank=True)
 
+    # CPF do cliente, coletado no cadastro. Informação sensível: armazenada só
+    # em dígitos e somente leitura — exibida no perfil, mas nunca editável.
+    cpf = models.CharField('CPF', max_length=14, blank=True)
+
     # Endereço salvo do cliente, reaproveitado no checkout para não pedir os
     # mesmos dados de novo. Cidade/bairro referenciam as áreas de entrega
     # cadastradas (mesma origem usada para calcular a taxa no checkout).
@@ -37,8 +41,21 @@ class Profile(models.Model):
         blank=True,
     )
 
+    @property
+    def handle(self):
+        """Nome de usuário sempre exibido com um único '@' na frente."""
+        return '@' + self.user.username.lstrip('@')
+
+    @property
+    def cpf_display(self):
+        """CPF formatado (000.000.000-00) para exibição; vazio se não houver."""
+        digits = ''.join(ch for ch in (self.cpf or '') if ch.isdigit())
+        if len(digits) != 11:
+            return self.cpf or ''
+        return f'{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}'
+
     def __str__(self):
-        return f'Perfil de {self.user.username}'
+        return f'Perfil de {self.user.get_full_name() or self.user.username}'
 
 
 @receiver(post_save, sender=User)

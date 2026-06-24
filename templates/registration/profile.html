@@ -31,8 +31,16 @@
       {# Modo leitura #}
       <dl class="profile-view">
         <div class="profile-field-row">
+          <dt>Nome</dt>
+          <dd>{{ request.user.get_full_name|default:request.user.username }}</dd>
+        </div>
+        <div class="profile-field-row">
           <dt>Usuário</dt>
-          <dd>{{ request.user.username }}</dd>
+          <dd>{{ request.user.profile.handle }}</dd>
+        </div>
+        <div class="profile-field-row">
+          <dt>CPF</dt>
+          <dd>{{ request.user.profile.cpf_display|default:"—" }}</dd>
         </div>
         <div class="profile-field-row">
           <dt>Telefone</dt>
@@ -165,7 +173,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/auth.js' %}?v=4"></script>
+<script src="{% static 'js/auth.js' %}?v=5"></script>
 <script>
   // Edição em linha (dados da conta e endereço): mostra o formulário só ao
   // clicar no lápis e esconde de novo no "Cancelar".

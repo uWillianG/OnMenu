@@ -367,6 +367,15 @@ class PixPaymentTests(TestCase):
         self.assertContains(response, 'id="pix-fields"')
         self.assertContains(response, 'name="customer_cpf"')
 
+    def test_checkout_prefills_cpf_from_profile(self):
+        customer = User.objects.create_user(username='@cpfcliente', password='password')
+        customer.profile.cpf = '39053344705'
+        customer.profile.save()
+        self.client.force_login(customer)
+        self._add_item(quantity=1)
+        response = self.client.get(reverse('orders:checkout'))
+        self.assertContains(response, 'value="390.533.447-05"')
+
     def test_pix_ajax_creates_order_and_charge(self):
         self._add_item(quantity=1)
         response = self._pix_post()

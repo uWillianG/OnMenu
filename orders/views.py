@@ -138,6 +138,7 @@ def _checkout_initial(request):
     if profile is not None:
         initial.update({
             'phone': profile.phone,
+            'customer_cpf': profile.cpf_display,
             'address_street': profile.address_street,
             'address_number': profile.address_number,
             'address_complement': profile.address_complement,

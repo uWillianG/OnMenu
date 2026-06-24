@@ -39,7 +39,9 @@ def signup(request):
         form = SignupForm(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user)
+            # Com múltiplos backends configurados, o login automático precisa
+            # saber qual usar para autenticar a sessão recém-criada.
+            login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
             return redirect(_safe_next(request, next_url))
     else:
         form = SignupForm()

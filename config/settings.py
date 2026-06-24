@@ -142,6 +142,13 @@ LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'orders:staff_order_list'
 LOGOUT_REDIRECT_URL = 'menu:menu_list'
 
+# Clientes entram pelo e-mail (o usuário é um @handle gerado); a equipe ainda
+# pode usar o nome de usuário. O ModelBackend padrão fica como fallback.
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # E-mail: sem SMTP configurado, os e-mails (ex.: recuperação de senha) são
 # impressos no console do runserver — análogo ao modo "mock" dos pagamentos.
 EMAIL_BACKEND = os.environ.get(

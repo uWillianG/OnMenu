@@ -36,6 +36,22 @@
     apply();  // formata também valor pré-preenchido (ex.: tela de perfil)
   });
 
+  // ── Máscara de CPF BR: XXX.XXX.XXX-XX ────────────────────────
+  function maskCpf(value) {
+    var d = value.replace(/\D/g, '').slice(0, 11);
+    var out = d.slice(0, 3);
+    if (d.length > 3) out += '.' + d.slice(3, 6);
+    if (d.length > 6) out += '.' + d.slice(6, 9);
+    if (d.length > 9) out += '-' + d.slice(9, 11);
+    return out;
+  }
+
+  document.querySelectorAll('input[data-mask="cpf"]').forEach(function (input) {
+    function apply() { input.value = maskCpf(input.value); }
+    input.addEventListener('input', apply);
+    apply();
+  });
+
   // ── Validação da senha em tempo real ─────────────────────────
   var pwd = document.getElementById('id_password1');
   var reqs = document.getElementById('password-reqs');

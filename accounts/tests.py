@@ -19,9 +19,10 @@ class AuthFlowTests(TestCase):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente1',
+                'full_name': 'João Silva',
                 'email': 'cliente1@example.com',
                 'phone': '(11) 99999-9999',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
                 'next': reverse('orders:checkout'),
@@ -30,16 +31,73 @@ class AuthFlowTests(TestCase):
         self.assertRedirects(
             response, reverse('orders:checkout'), fetch_redirect_response=False
         )
-        self.assertTrue(User.objects.filter(username='cliente1').exists())
+        user = User.objects.get(email='cliente1@example.com')
+        # Nome dividido em primeiro/sobrenome e @handle gerado automaticamente.
+        self.assertEqual(user.first_name, 'João')
+        self.assertEqual(user.last_name, 'Silva')
+        self.assertEqual(user.username, '@joaosilva')
+        # CPF guardado só em dígitos no Profile.
+        self.assertEqual(user.profile.cpf, '11144477735')
         self.assertIn('_auth_user_id', self.client.session)
+
+    def test_signup_handle_uses_first_and_last_name_only(self):
+        self.client.post(reverse('accounts:signup'), {
+            'full_name': 'Maria de Souza',
+            'email': 'maria.souza@example.com',
+            'phone': '(11) 99999-9999',
+            'cpf': '111.444.777-35',
+            'password1': 'Sup3rSecret!9',
+            'password2': 'Sup3rSecret!9',
+        })
+        user = User.objects.get(email='maria.souza@example.com')
+        self.assertEqual(user.username, '@mariasouza')   # ignora "de"
+        self.assertEqual(user.first_name, 'Maria')
+        self.assertEqual(user.last_name, 'de Souza')     # nome completo preservado
+
+    def test_signup_appends_suffix_for_duplicate_handle(self):
+        base = {
+            'phone': '(11) 99999-9999',
+            'password1': 'Sup3rSecret!9',
+            'password2': 'Sup3rSecret!9',
+        }
+        self.client.post(reverse('accounts:signup'), {
+            **base, 'full_name': 'João Silva',
+            'email': 'a@example.com', 'cpf': '111.444.777-35',
+        })
+        self.client.logout()
+        self.client.post(reverse('accounts:signup'), {
+            **base, 'full_name': 'João Silva',
+            'email': 'b@example.com', 'cpf': '529.982.247-25',
+        })
+        self.assertTrue(User.objects.filter(username='@joaosilva').exists())
+        self.assertTrue(User.objects.filter(username='@joaosilva2').exists())
+
+    def test_login_with_email(self):
+        self.client.post(reverse('accounts:signup'), {
+            'full_name': 'Maria Souza',
+            'email': 'maria@example.com',
+            'phone': '(11) 99999-9999',
+            'cpf': '111.444.777-35',
+            'password1': 'Sup3rSecret!9',
+            'password2': 'Sup3rSecret!9',
+        })
+        self.client.logout()
+        response = self.client.post(
+            reverse('accounts:login'),
+            {'username': 'maria@example.com', 'password': 'Sup3rSecret!9'},
+        )
+        self.assertRedirects(
+            response, reverse('menu:menu_list'), fetch_redirect_response=False
+        )
 
     def test_signup_rejects_open_redirect(self):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente2',
+                'full_name': 'Carlos Lima',
                 'email': 'cliente2@example.com',
                 'phone': '(11) 99999-9999',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
                 'next': 'https://evil.example.com/phish',
@@ -63,39 +121,44 @@ class AuthFlowTests(TestCase):
             response, reverse('orders:checkout'), fetch_redirect_response=False
         )
 
-    def test_signup_allows_any_username_characters(self):
+    def test_signup_requires_full_name_with_surname(self):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente novo!',
-                'email': 'cliente_novo@example.com',
+                'full_name': 'Joao',
+                'email': 'so_nome@example.com',
                 'phone': '(11) 99999-9999',
-                'password1': 'Sup3rSecret!9',
-                'password2': 'Sup3rSecret!9',
-            },
-        )
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(User.objects.filter(username='cliente novo!').exists())
-
-    def test_signup_enforces_username_length_limit(self):
-        response = self.client.post(
-            reverse('accounts:signup'),
-            {
-                'username': 'x' * 151,
-                'email': 'longo@example.com',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
             },
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn('username', response.context['form'].errors)
+        self.assertIn('full_name', response.context['form'].errors)
+
+    def test_signup_requires_valid_cpf(self):
+        response = self.client.post(
+            reverse('accounts:signup'),
+            {
+                'full_name': 'João Silva',
+                'email': 'cpf_curto@example.com',
+                'phone': '(11) 99999-9999',
+                'cpf': '123',
+                'password1': 'Sup3rSecret!9',
+                'password2': 'Sup3rSecret!9',
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('cpf', response.context['form'].errors)
 
     def test_signup_rejects_weak_password(self):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente_fraco',
+                'full_name': 'Cliente Fraco',
                 'email': 'fraco@example.com',
+                'phone': '(11) 99999-9999',
+                'cpf': '111.444.777-35',
                 'password1': 'abcdefgh',
                 'password2': 'abcdefgh',
             },
@@ -110,8 +173,10 @@ class AuthFlowTests(TestCase):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente_email',
+                'full_name': 'Cliente Email',
                 'email': 'nao-e-email',
+                'phone': '(11) 99999-9999',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
             },
@@ -145,7 +210,7 @@ class AuthFlowTests(TestCase):
 
     def test_login_form_labels_in_portuguese(self):
         html = self.client.get(reverse('accounts:login')).content.decode()
-        self.assertIn('Usuário', html)
+        self.assertIn('E-mail ou usuário', html)
         self.assertIn('Senha', html)
         self.assertNotIn('>Username<', html)
         self.assertNotIn('>Password<', html)
@@ -154,8 +219,10 @@ class AuthFlowTests(TestCase):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'cliente_pt',
+                'full_name': 'Cliente Pt',
                 'email': 'cliente_pt@example.com',
+                'phone': '(11) 99999-9999',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'naoConfere!9',
             },
@@ -261,8 +328,9 @@ class PhoneAndProfileTests(TestCase):
         response = self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'sem_tel',
+                'full_name': 'Sem Telefone',
                 'email': 'sem_tel@example.com',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
             },
@@ -270,54 +338,76 @@ class PhoneAndProfileTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('phone', response.context['form'].errors)
 
-    def test_signup_saves_phone_to_profile(self):
+    def test_signup_saves_phone_and_cpf_to_profile(self):
         self.client.post(
             reverse('accounts:signup'),
             {
-                'username': 'com_tel',
+                'full_name': 'Com Telefone',
                 'email': 'com_tel@example.com',
                 'phone': '(11) 98888-7777',
+                'cpf': '111.444.777-35',
                 'password1': 'Sup3rSecret!9',
                 'password2': 'Sup3rSecret!9',
             },
         )
-        user = User.objects.get(username='com_tel')
+        user = User.objects.get(email='com_tel@example.com')
         self.assertEqual(user.profile.phone, '(11) 98888-7777')
+        self.assertEqual(user.profile.cpf, '11144477735')
 
-    def test_profile_shows_phone_in_read_mode(self):
+    def test_profile_shows_name_username_and_cpf_read_only(self):
         user = User.objects.create_user(
-            username='leitor', password='Sup3rSecret!9', email='leitor@example.com'
+            username='@leitorteste', password='Sup3rSecret!9',
+            email='leitor@example.com', first_name='Leitor', last_name='Teste',
         )
         user.profile.phone = '(21) 3333-4444'
+        user.profile.cpf = '11144477735'
         user.profile.save()
         self.client.force_login(user)
         html = self.client.get(reverse('accounts:profile')).content.decode()
         self.assertIn('(21) 3333-4444', html)
-        # Nome/Sobrenome não devem mais existir no formulário
-        self.assertNotIn('>Nome<', html)
-        self.assertNotIn('>Sobrenome<', html)
+        self.assertIn('Leitor Teste', html)
+        # Usuário e CPF aparecem (formatado), mas só para leitura.
+        self.assertIn('@leitorteste', html)
+        self.assertIn('111.444.777-35', html)
+        # CPF e usuário não têm campo no formulário de edição.
+        form = self.client.get(reverse('accounts:profile')).context['form']
+        self.assertNotIn('cpf', form.fields)
+        self.assertNotIn('username', form.fields)
 
-    def test_profile_updates_phone(self):
+    def test_profile_updates_name_and_phone(self):
         user = User.objects.create_user(
-            username='editor', password='Sup3rSecret!9', email='editor@example.com'
+            username='@editor', password='Sup3rSecret!9', email='editor@example.com'
         )
         self.client.force_login(user)
         response = self.client.post(
             reverse('accounts:profile'),
-            {'username': 'editor', 'email': 'editor@example.com', 'phone': '(31) 2222-1111'},
+            {
+                'full_name': 'Editor Atualizado',
+                'email': 'editor@example.com',
+                'phone': '(31) 2222-1111',
+            },
         )
         self.assertRedirects(response, reverse('accounts:profile'))
+        user.refresh_from_db()
         user.profile.refresh_from_db()
+        self.assertEqual(user.first_name, 'Editor')
+        self.assertEqual(user.last_name, 'Atualizado')
         self.assertEqual(user.profile.phone, '(31) 2222-1111')
+        # O @handle não muda ao editar o nome no perfil.
+        self.assertEqual(user.username, '@editor')
 
     def test_profile_rejects_invalid_phone(self):
         user = User.objects.create_user(
-            username='invalido', password='Sup3rSecret!9', email='invalido@example.com'
+            username='@invalido', password='Sup3rSecret!9', email='invalido@example.com'
         )
         self.client.force_login(user)
         response = self.client.post(
             reverse('accounts:profile'),
-            {'username': 'invalido', 'email': 'invalido@example.com', 'phone': '123'},
+            {
+                'full_name': 'Invalido Teste',
+                'email': 'invalido@example.com',
+                'phone': '123',
+            },
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn('phone', response.context['form'].errors)
