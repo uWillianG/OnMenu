@@ -602,39 +602,186 @@ a.notif-link:hover .notif-message { color: var(--primary); }
 .track-block-cta svg { width: 15px; height: 15px; transition: transform .18s ease; }
 .track-block-card:hover .track-block-cta svg { transform: translateX(2px); }
 
-.hours-details {
-  width: 100%;
-  margin: 0 auto;
+/* ── Hero action chip (staff) ───────────────────────────────── */
+a.hero-chip-action {
+  text-decoration: none;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  overflow: hidden;
+  border-style: dashed;
+  border-color: var(--border-strong);
+  transition: color .15s, border-color .15s;
+}
+a.hero-chip-action:hover { color: var(--primary); border-color: var(--primary); }
+
+.today-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: .65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  vertical-align: middle;
 }
 
-.hours-details summary {
-  cursor: pointer;
-  padding: 12px 18px;
-  font-size: .85rem;
-  font-weight: 700;
-  color: var(--muted);
-  list-style: none;
+/* ── Editor de horários (tela admin) ────────────────────────── */
+.hours-page { max-width: 600px; }
+.inline-ico { width: 15px; height: 15px; vertical-align: -3px; }
+
+.hours-page .page-h1 { display: flex; align-items: center; gap: 10px; }
+
+/* cabeçalho do card: label à esquerda, botão de edição à direita */
+.hours-card-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 12px;
 }
+.hours-card-label { font-weight: 800; font-size: 1.02rem; color: var(--text); }
 
-.hours-details summary::-webkit-details-marker { display: none; }
-.hours-details[open] summary { color: var(--text); border-bottom: 1px solid var(--border); }
+/* modo leitura (form travado): mostra os dias sem permitir edição */
+.hours-form:not(.is-editing) .day-row { pointer-events: none; }
+.hours-form:not(.is-editing) .copy-btn,
+.hours-form:not(.is-editing) .hours-tip,
+.hours-form:not(.is-editing) .hours-form-actions { display: none; }
 
-.hours-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+/* edit tip */
+.hours-tip {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.hours-tip > svg { width: 18px; height: 18px; flex: none; color: var(--primary); margin-top: 1px; }
+.hours-tip ul { margin: 0; padding-left: 16px; display: grid; gap: 5px; }
+.hours-tip li { font-size: .84rem; color: var(--muted); line-height: 1.45; }
+.hours-tip strong { color: var(--text); }
 
-.hours-table td {
-  padding: 8px 18px;
-  border-bottom: 1px solid var(--border);
+.hours-form { display: grid; gap: 18px; }
+.hours-days { display: grid; gap: 8px; }
+
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: background .15s, border-color .15s;
+}
+.day-row.is-closed { background: var(--surface-2); }
+.day-row.is-today  { border-color: var(--primary); }
+
+.day-name {
+  flex: 0 0 116px;
+  font-weight: 700;
+  font-size: .9rem;
+  color: var(--text);
+}
+.day-row.is-closed .day-name { color: var(--muted); }
+
+/* toggle switch (canonical pattern) */
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+}
+.switch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background .18s ease;
+}
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-xs);
+  transition: transform .18s ease;
+}
+.switch input:checked + .switch-slider { background: var(--primary); }
+.switch input:checked + .switch-slider::before { transform: translateX(18px); }
+.switch input:focus-visible + .switch-slider { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.day-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.day-times { display: flex; align-items: center; gap: 7px; }
+.day-times input[type="time"] {
+  width: 102px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: .88rem;
+  color: var(--text);
+  background: var(--surface);
+}
+.day-times input[type="time"]:focus { outline: none; border-color: var(--primary); }
+.time-sep { color: var(--muted); font-size: .85rem; }
+
+.day-closed { display: none; color: var(--muted); font-weight: 600; font-size: .85rem; }
+.day-row.is-closed .day-times { display: none; }
+.day-row.is-closed .day-closed { display: inline; }
+
+.copy-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--muted);
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
 }
+.copy-btn svg { width: 16px; height: 16px; }
+.copy-btn:hover { color: var(--primary); border-color: var(--primary); }
+.copy-btn.is-done { color: #15803d; border-color: #c7f0d9; background: #ecfdf3; }
 
-.hours-table tr:last-child td { border-bottom: none; }
-.hours-table td:first-child   { font-weight: 700; color: var(--text); width: 48%; }
+.hours-form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.hours-form-actions .btn-secondary,
+.hours-form-actions .btn-primary { text-align: center; }
+
+@media (max-width: 480px) {
+  .day-name { flex: 1 1 auto; }
+  .day-controls { margin-left: 0; flex-basis: 100%; }
+  .day-times { flex: 1; }
+  .day-times input[type="time"] { flex: 1; width: auto; }
+  .hours-form-actions .btn-secondary,
+  .hours-form-actions .btn-primary { flex: 1; }
+}
 
 /* ── Category Nav ───────────────────────────────────────────── */
 .category-nav {

@@ -15,6 +15,16 @@ class Restaurant(models.Model):
         decimal_places=2,
         default=Decimal('0.00'),
     )
+    delivery_time_min = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Tempo mínimo de entrega, em minutos.',
+    )
+    delivery_time_max = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Tempo máximo de entrega, em minutos.',
+    )
     accepts_delivery = models.BooleanField(default=True)
     accepts_pickup = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
@@ -30,6 +40,18 @@ class Restaurant(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def delivery_time_display(self):
+        """Faixa de tempo de entrega, ex.: '30–45 min'. Vazio se não definido."""
+        low, high = self.delivery_time_min, self.delivery_time_max
+        if low and high:
+            return f'{low}–{high} min'
+        if low:
+            return f'{low} min'
+        if high:
+            return f'até {high} min'
+        return ''
 
 
 class Category(models.Model):

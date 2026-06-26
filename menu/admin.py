@@ -23,6 +23,8 @@ class RestaurantAdmin(admin.ModelAdmin):
         'phone',
         'whatsapp_number',
         'delivery_fee',
+        'delivery_time_min',
+        'delivery_time_max',
         'accepts_delivery',
         'accepts_pickup',
         'is_active',

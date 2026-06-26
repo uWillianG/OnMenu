@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block title %}Horário de funcionamento | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="staff-page hours-page">
+
+    <div class="split-heading">
+      <h1 class="page-h1">
+        <svg class="page-h1-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        Horário de funcionamento
+      </h1>
+    </div>
+
+    <div class="detail-card">
+      <div class="hours-card-head">
+        <span class="hours-card-label">Dias da semana</span>
+        <button type="button" class="profile-edit-toggle" id="hours-edit-toggle"
+                aria-label="Editar horários" title="Editar horários">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+      </div>
+
+      <form method="post" class="hours-form" id="hours-edit">
+        {% csrf_token %}
+
+        <div class="hours-tip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <ul>
+            <li>Ligue o botão dos dias em que o restaurante abre e ajuste os horários.</li>
+            <li>Use o ícone <svg class="inline-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> para repetir o horário de um dia na semana toda.</li>
+            <li>Dias desligados aparecem como <strong>Fechado</strong> para os clientes.</li>
+          </ul>
+        </div>
+
+        <div class="hours-days">
+          {% for h in week_hours %}
+            {% with closed=h.hours.is_closed has=h.hours %}
+            <div class="day-row{% if not has or closed %} is-closed{% endif %}{% if h.is_today %} is-today{% endif %}" data-day="{{ h.day }}">
+              <span class="day-name">{{ h.label }}{% if h.is_today %} <span class="today-tag">hoje</span>{% endif %}</span>
+
+              <label class="switch" title="Aberto / Fechado">
+                <input type="checkbox" class="day-active" name="active_{{ h.day }}"
+                       {% if has and not closed %}checked{% endif %}>
+                <span class="switch-slider"></span>
+              </label>
+
+              <div class="day-controls">
+                <div class="day-times">
+                  <input type="time" name="open_{{ h.day }}" aria-label="Abertura {{ h.label }}"
+                         value="{% if h.hours and h.hours.open_time %}{{ h.hours.open_time|time:'H:i' }}{% endif %}">
+                  <span class="time-sep">às</span>
+                  <input type="time" name="close_{{ h.day }}" aria-label="Fechamento {{ h.label }}"
+                         value="{% if h.hours and h.hours.close_time %}{{ h.hours.close_time|time:'H:i' }}{% endif %}">
+                </div>
+                <span class="day-closed">Fechado</span>
+                <button type="button" class="copy-btn" aria-label="Aplicar este horário a todos os dias" title="Aplicar a todos os dias">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+            {% endwith %}
+          {% endfor %}
+        </div>
+
+        <div class="hours-form-actions">
+          <button type="button" class="btn-secondary" id="hours-cancel">Cancelar</button>
+          <button type="submit" class="btn-primary">Salvar horários</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Editor de horários ─────────────────────────────────────── */
+(function () {
+  const DEFAULT_OPEN = '09:00';
+  const DEFAULT_CLOSE = '18:00';
+
+  const form   = document.getElementById('hours-edit');
+  const editBt = document.getElementById('hours-edit-toggle');
+  const cancel = document.getElementById('hours-cancel');
+  if (!form) return;
+
+  const rows = Array.from(form.querySelectorAll('.day-row'));
+
+  function parts(row) {
+    return {
+      active: row.querySelector('.day-active'),
+      open:   row.querySelector('input[name^="open_"]'),
+      close:  row.querySelector('input[name^="close_"]'),
+    };
+  }
+
+  function syncRow(row) {
+    const { active, open, close } = parts(row);
+    const isOpen = active.checked;
+    row.classList.toggle('is-closed', !isOpen);
+    open.disabled = close.disabled = !isOpen;
+    if (isOpen) {
+      if (!open.value)  open.value = DEFAULT_OPEN;
+      if (!close.value) close.value = DEFAULT_CLOSE;
+    }
+  }
+
+  function copyToAll(sourceRow) {
+    const src = parts(sourceRow);
+    rows.forEach((row) => {
+      if (row === sourceRow) return;
+      const dst = parts(row);
+      dst.active.checked = src.active.checked;
+      dst.open.value = src.open.value;
+      dst.close.value = src.close.value;
+      syncRow(row);
+    });
+  }
+
+  rows.forEach((row) => {
+    syncRow(row);
+    parts(row).active.addEventListener('change', () => syncRow(row));
+    const copyBtn = row.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', () => {
+      copyToAll(row);
+      copyBtn.classList.add('is-done');
+      setTimeout(() => copyBtn.classList.remove('is-done'), 1100);
+    });
+  });
+
+  // Destrava os mesmos campos para edição (sem trocar de layout).
+  editBt.addEventListener('click', () => {
+    form.classList.add('is-editing');
+    editBt.hidden = true;
+  });
+  // Cancelar descarta as alterações recarregando o estado salvo.
+  cancel.addEventListener('click', () => window.location.reload());
+})();
+</script>
+{% endblock %}
