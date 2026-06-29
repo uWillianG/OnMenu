@@ -3,12 +3,14 @@ from datetime import datetime
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Prefetch
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from cart.cart import Cart
 from orders.selectors import get_tracked_active_orders
 
-from .models import BusinessHours, MenuItem
+from .forms import CategoryForm, MenuItemForm
+from .models import BusinessHours, Category, MenuItem
 from .selectors import get_current_restaurant, get_open_status
 
 
@@ -118,6 +120,157 @@ def edit_business_hours(request):
             'week_hours': _build_week_hours(restaurant),
         },
     )
+
+
+@staff_member_required
+def manage_menu(request):
+    """Tela do admin para gerenciar o cardápio (categorias e itens)."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    categories = (
+        restaurant.categories
+        .prefetch_related(
+            Prefetch(
+                'items',
+                queryset=MenuItem.objects.order_by('display_order', 'name'),
+            ),
+        )
+        .order_by('display_order', 'name')
+    )
+    item_count = MenuItem.objects.filter(category__restaurant=restaurant).count()
+
+    return render(
+        request,
+        'menu/manage_menu.html',
+        {
+            'restaurant': restaurant,
+            'categories': categories,
+            'item_count': item_count,
+            'category_form': CategoryForm(),
+        },
+    )
+
+
+@staff_member_required
+def category_create(request):
+    """Cria uma nova categoria a partir do formulário inline da tela de gestão."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    if request.method == 'POST':
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            category = form.save(commit=False)
+            category.restaurant = restaurant
+            category.save()
+            messages.success(request, f'Categoria “{category.name}” criada.')
+        else:
+            first_error = next(iter(form.errors.values()))[0]
+            messages.error(request, f'Não foi possível criar a categoria: {first_error}')
+
+    return redirect('menu:manage_menu')
+
+
+@staff_member_required
+def category_delete(request, pk):
+    """Exclui uma categoria (e seus itens) do restaurante atual."""
+    restaurant = get_current_restaurant()
+    category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
+    if request.method == 'POST':
+        name = category.name
+        category.delete()
+        messages.success(request, f'Categoria “{name}” excluída.')
+    return redirect('menu:manage_menu')
+
+
+@staff_member_required
+def item_create(request):
+    """Cadastra um novo item do cardápio (lanche, bebida, etc.)."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    if not restaurant.categories.exists():
+        messages.error(request, 'Crie uma categoria antes de adicionar itens.')
+        return redirect('menu:manage_menu')
+
+    if request.method == 'POST':
+        form = MenuItemForm(request.POST, request.FILES, restaurant=restaurant)
+        if form.is_valid():
+            item = form.save()
+            messages.success(request, f'Item “{item.name}” adicionado ao cardápio.')
+            return redirect('menu:manage_menu')
+    else:
+        initial = {}
+        category_id = request.GET.get('category')
+        if category_id:
+            initial['category'] = category_id
+        form = MenuItemForm(restaurant=restaurant, initial=initial)
+
+    return render(
+        request,
+        'menu/item_form.html',
+        {'form': form, 'restaurant': restaurant, 'is_edit': False},
+    )
+
+
+@staff_member_required
+def item_edit(request, pk):
+    """Edita um item existente do cardápio."""
+    restaurant = get_current_restaurant()
+    item = get_object_or_404(MenuItem, pk=pk, category__restaurant=restaurant)
+
+    if request.method == 'POST':
+        form = MenuItemForm(request.POST, request.FILES, instance=item, restaurant=restaurant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Item “{item.name}” atualizado.')
+            return redirect('menu:manage_menu')
+    else:
+        form = MenuItemForm(instance=item, restaurant=restaurant)
+
+    return render(
+        request,
+        'menu/item_form.html',
+        {'form': form, 'restaurant': restaurant, 'is_edit': True, 'item': item},
+    )
+
+
+@staff_member_required
+def item_toggle_available(request, pk):
+    """Bloqueia/desbloqueia a venda de um item (alterna is_available)."""
+    restaurant = get_current_restaurant()
+    item = get_object_or_404(MenuItem, pk=pk, category__restaurant=restaurant)
+    if request.method == 'POST':
+        item.is_available = not item.is_available
+        item.save(update_fields=['is_available', 'updated_at'])
+        msg = (
+            f'Item “{item.name}” liberado para venda.'
+            if item.is_available
+            else f'Item “{item.name}” bloqueado.'
+        )
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'available': item.is_available, 'message': msg})
+        messages.success(request, msg)
+    return redirect('menu:manage_menu')
+
+
+@staff_member_required
+def item_delete(request, pk):
+    """Exclui um item do cardápio."""
+    restaurant = get_current_restaurant()
+    item = get_object_or_404(MenuItem, pk=pk, category__restaurant=restaurant)
+    if request.method == 'POST':
+        name = item.name
+        item.delete()
+        messages.success(request, f'Item “{name}” excluído.')
+    return redirect('menu:manage_menu')
 
 
 def item_detail(request, pk, slug):

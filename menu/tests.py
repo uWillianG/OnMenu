@@ -56,6 +56,143 @@ class MenuViewsTests(TestCase):
         self.assertContains(response, 'Adicionar ao carrinho')
 
 
+class ManageMenuTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Test Kitchen', slug='tk')
+        self.category = Category.objects.create(
+            restaurant=self.restaurant, name='Lanches', slug='lanches',
+        )
+        self.staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+
+    def test_requires_staff(self):
+        url = reverse('menu:manage_menu')
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+    def test_staff_sees_manage_page(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('menu:manage_menu'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Gerenciar cardápio')
+        self.assertContains(response, 'Lanches')
+
+    def test_staff_can_create_category(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:category_create'),
+            {'name': 'Bebidas', 'display_order': 0, 'is_active': 'on'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Category.objects.filter(restaurant=self.restaurant, name='Bebidas').exists()
+        )
+
+    def test_item_form_renders(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('menu:item_create'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Novo item')
+        self.assertContains(response, 'Categoria')
+
+    def test_staff_can_create_item(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:item_create'),
+            {
+                'category': self.category.pk,
+                'name': 'X-Burger',
+                'description': 'Delícia',
+                'price': '25,50',
+                'image_url': '',
+                'display_order': 0,
+                'is_available': 'on',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        item = MenuItem.objects.get(name='X-Burger')
+        self.assertEqual(item.category, self.category)
+        self.assertEqual(item.price, Decimal('25.50'))
+
+    def test_price_accepts_br_format_with_thousands(self):
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse('menu:item_create'),
+            {
+                'category': self.category.pk,
+                'name': 'Combo Família',
+                'description': '',
+                'price': '1.234,56',
+                'image_url': '',
+                'display_order': 0,
+                'is_available': 'on',
+            },
+            follow=True,
+        )
+        item = MenuItem.objects.get(name='Combo Família')
+        self.assertEqual(item.price, Decimal('1234.56'))
+
+    def test_staff_can_edit_item(self):
+        item = MenuItem.objects.create(
+            category=self.category, name='Old', slug='old', price=Decimal('10.00'),
+        )
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse('menu:item_edit', args=[item.pk]),
+            {
+                'category': self.category.pk,
+                'name': 'New',
+                'description': '',
+                'price': '15,00',
+                'image_url': '',
+                'display_order': 0,
+                'is_available': 'on',
+            },
+            follow=True,
+        )
+        item.refresh_from_db()
+        self.assertEqual(item.name, 'New')
+        self.assertEqual(item.price, Decimal('15.00'))
+
+    def test_staff_can_toggle_availability(self):
+        item = MenuItem.objects.create(
+            category=self.category, name='Bloqueável', slug='bloq',
+            price=Decimal('5.00'), is_available=True,
+        )
+        self.client.force_login(self.staff)
+        self.client.post(reverse('menu:item_toggle_available', args=[item.pk]))
+        item.refresh_from_db()
+        self.assertFalse(item.is_available)
+        self.client.post(reverse('menu:item_toggle_available', args=[item.pk]))
+        item.refresh_from_db()
+        self.assertTrue(item.is_available)
+
+    def test_toggle_availability_ajax_returns_json(self):
+        item = MenuItem.objects.create(
+            category=self.category, name='Ajax', slug='ajax',
+            price=Decimal('5.00'), is_available=True,
+        )
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:item_toggle_available', args=[item.pk]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['available'], False)
+        item.refresh_from_db()
+        self.assertFalse(item.is_available)
+
+    def test_staff_can_delete_item(self):
+        item = MenuItem.objects.create(
+            category=self.category, name='Trash', slug='trash', price=Decimal('1.00'),
+        )
+        self.client.force_login(self.staff)
+        self.client.post(reverse('menu:item_delete', args=[item.pk]))
+        self.assertFalse(MenuItem.objects.filter(pk=item.pk).exists())
+
+
 class BusinessHoursTests(TestCase):
     def setUp(self):
         self.restaurant = Restaurant.objects.create(name='Test Kitchen', slug='tk')

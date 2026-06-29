@@ -1,0 +1,174 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerenciar cardápio | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="staff-page manage-menu">
+
+    <div class="split-heading">
+      <h1 class="page-h1">
+        <svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M5 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
+        Gerenciar cardápio
+      </h1>
+      <a class="btn-primary" href="{% url 'menu:item_create' %}">+ Adicionar item</a>
+    </div>
+
+    <p class="manage-sub">{{ item_count }} ite{{ item_count|pluralize:"m,ns" }} em {{ categories|length }} categoria{{ categories|length|pluralize }}.</p>
+
+    {# ── Nova categoria (inline) ── #}
+    <details class="detail-card manage-add-cat">
+      <summary>
+        <span class="manage-add-cat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova categoria
+        </span>
+        <span class="section-chevron">▼</span>
+      </summary>
+      <form method="post" action="{% url 'menu:category_create' %}" class="manage-cat-form">
+        {% csrf_token %}
+        <div class="form-field">
+          <label class="form-label" for="{{ category_form.name.id_for_label }}">{{ category_form.name.label }}</label>
+          {{ category_form.name }}
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="{{ category_form.display_order.id_for_label }}">{{ category_form.display_order.label }}</label>
+          {{ category_form.display_order }}
+        </div>
+        <button type="submit" class="btn-primary">Criar categoria</button>
+      </form>
+    </details>
+
+    {# ── Categorias e itens (recolhidas; clique para listar) ── #}
+    {% for category in categories %}
+      <details class="detail-card manage-cat">
+        <summary class="manage-cat-head">
+          <span class="manage-cat-title">
+            <h2>{{ category.name }}</h2>
+            <span class="manage-cat-count">{{ category.items.all|length }} ite{{ category.items.all|length|pluralize:"m,ns" }}</span>
+            {% if not category.is_active %}<span class="manage-tag muted">Inativa</span>{% endif %}
+          </span>
+          <span class="section-chevron">▼</span>
+        </summary>
+
+        <div class="manage-cat-body">
+          <div class="manage-cat-toolbar">
+            <a class="btn-secondary manage-add-item" href="{% url 'menu:item_create' %}?category={{ category.id }}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Adicionar item
+            </a>
+            <form method="post" action="{% url 'menu:category_delete' category.id %}"
+                  onsubmit="return confirm('Excluir a categoria “{{ category.name|escapejs }}” e todos os seus itens?');">
+              {% csrf_token %}
+              <button type="submit" class="card-icon-btn danger" title="Excluir categoria" aria-label="Excluir categoria">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </form>
+          </div>
+
+        {% for item in category.items.all %}
+          <div class="manage-item">
+            <div class="manage-item-thumb">
+              {% if item.image_src %}
+                <img src="{{ item.image_src }}" alt="{{ item.name }}" loading="lazy">
+              {% else %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              {% endif %}
+            </div>
+            <div class="manage-item-info">
+              <span class="manage-item-name">{{ item.name }}</span>
+              <span class="manage-item-meta">
+                {% if not item.is_available %}<span class="manage-tag muted tag-unavailable">Indisponível</span>{% endif %}
+                {% if item.is_featured %}<span class="manage-tag accent">Destaque</span>{% endif %}
+              </span>
+            </div>
+            <span class="manage-item-price">{{ currency_symbol }} {{ item.price|floatformat:2 }}</span>
+            <div class="manage-item-actions">
+              <a class="card-icon-btn" href="{% url 'menu:item_edit' item.id %}" title="Editar item" aria-label="Editar item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </a>
+              <form method="post" action="{% url 'menu:item_toggle_available' item.id %}" class="js-toggle-available">
+                {% csrf_token %}
+                <button type="submit" class="card-icon-btn toggle-available{% if not item.is_available %} is-blocked{% endif %}"
+                        title="{% if item.is_available %}Bloquear item{% else %}Liberar item{% endif %}"
+                        aria-label="Bloquear ou liberar item">
+                  <svg class="ico-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <svg class="ico-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                </button>
+              </form>
+              <form method="post" action="{% url 'menu:item_delete' item.id %}"
+                    onsubmit="return confirm('Excluir o item “{{ item.name|escapejs }}”?');">
+                {% csrf_token %}
+                <button type="submit" class="card-icon-btn danger" title="Excluir item" aria-label="Excluir item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="manage-cat-empty">Nenhum item nesta categoria ainda.
+            <a href="{% url 'menu:item_create' %}?category={{ category.id }}">Adicionar o primeiro</a>.
+          </p>
+        {% endfor %}
+        </div>
+      </details>
+    {% empty %}
+      <div class="empty-state">
+        <h2>Cardápio vazio</h2>
+        <p>Crie uma categoria (ex.: Lanches, Bebidas) para começar a cadastrar itens.</p>
+      </div>
+    {% endfor %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Bloquear/liberar item sem recarregar a página ───────────── */
+(function () {
+  document.querySelectorAll('.js-toggle-available').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = form.querySelector('button');
+      if (btn.disabled) return;
+      btn.disabled = true;
+
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: new FormData(form),
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error('http ' + r.status);
+          return r.json();
+        })
+        .then(function (data) {
+          var blocked = !data.available;
+          btn.classList.toggle('is-blocked', blocked);
+          btn.title = blocked ? 'Liberar item' : 'Bloquear item';
+
+          var row = form.closest('.manage-item');
+          var meta = row.querySelector('.manage-item-meta');
+          var tag = meta.querySelector('.tag-unavailable');
+          if (blocked && !tag) {
+            tag = document.createElement('span');
+            tag.className = 'manage-tag muted tag-unavailable';
+            tag.textContent = 'Indisponível';
+            meta.insertBefore(tag, meta.firstChild);
+          } else if (!blocked && tag) {
+            tag.remove();
+          }
+        })
+        .catch(function () {
+          // Em caso de falha, recorre ao envio tradicional (recarrega).
+          form.submit();
+        })
+        .finally(function () {
+          btn.disabled = false;
+        });
+    });
+  });
+})();
+</script>
+{% endblock %}

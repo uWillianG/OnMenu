@@ -63,7 +63,7 @@
   {% if categories %}
     <nav class="category-nav" aria-label="Categorias">
       {% if featured_items %}
-        <a href="#destaques" class="cat-link" data-section="destaques">⭐ Destaques</a>
+        <a href="#destaques" class="cat-link" data-section="destaques"><svg class="cat-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Destaques</a>
       {% endif %}
       {% for cat in categories %}
         <a href="#{{ cat.slug }}" class="cat-link" data-section="{{ cat.slug }}">{{ cat.name }}</a>
@@ -82,7 +82,7 @@
         {% if featured_items %}
           <details class="menu-section featured" id="destaques" open>
             <summary>
-              ⭐ Destaques
+              <svg class="sec-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Destaques
               <span class="section-item-count">{{ featured_items|length }} ite{% if featured_items|length == 1 %}m{% else %}ns{% endif %}</span>
               <span class="section-chevron">▼</span>
             </summary>
