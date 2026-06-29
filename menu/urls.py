@@ -6,6 +6,8 @@ app_name = 'menu'
 
 urlpatterns = [
     path('', views.menu_list, name='menu_list'),
+    path('informacoes/', views.restaurant_info, name='restaurant_info'),
+    path('informacoes/logo/', views.update_logo, name='update_logo'),
     path('staff/horarios/', views.edit_business_hours, name='edit_business_hours'),
     path('staff/cardapio/', views.manage_menu, name='manage_menu'),
     path('staff/cardapio/categoria/nova/', views.category_create, name='category_create'),

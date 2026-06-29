@@ -2,7 +2,23 @@
 
 from django.db.models import Q
 
-from .models import Order
+from .models import Neighborhood, Order
+
+
+def get_delivery_fee_range():
+    """Faixa de taxa de entrega (mín, máx) somando cidade + bairro ativos.
+
+    Retorna ``None`` quando não há áreas de entrega cadastradas.
+    """
+    pairs = (
+        Neighborhood.objects
+        .filter(is_active=True, city__is_active=True)
+        .select_related('city')
+    )
+    fees = [n.city.delivery_fee + n.delivery_fee for n in pairs]
+    if not fees:
+        return None
+    return min(fees), max(fees)
 
 # Números de pedido guardados na sessão para acompanhamento na home
 # (cobre pedidos feitos sem login).

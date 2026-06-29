@@ -1,6 +1,18 @@
 from django import forms
 
-from .models import Category, MenuItem
+from .models import Category, MenuItem, Restaurant
+
+
+class RestaurantLogoForm(forms.ModelForm):
+    """Upload do logo do estabelecimento (usado pelo staff na tela de info)."""
+
+    class Meta:
+        model = Restaurant
+        fields = ['logo']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['logo'].required = True
 
 
 class BRLDecimalField(forms.DecimalField):

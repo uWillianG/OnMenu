@@ -7,6 +7,7 @@ from django.utils.text import slugify
 class Restaurant(models.Model):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140, unique=True, blank=True)
+    logo = models.ImageField(upload_to='restaurant/', blank=True)
     phone = models.CharField(max_length=40, blank=True)
     address = models.CharField(max_length=255, blank=True)
     whatsapp_number = models.CharField(max_length=30, blank=True)

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=98">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=104">
 </head>
 <body>
 
@@ -114,6 +114,11 @@
           </span> Cadastre-se
         </a>
       {% endif %}
+      <a class="sidebar-link {% if view == 'menu:restaurant_info' %}is-active{% endif %}" href="{% url 'menu:restaurant_info' %}">
+        <span class="sidebar-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        </span> Informações
+      </a>
     </nav>
     {% endwith %}
     {% if request.user.is_authenticated %}

@@ -7,9 +7,9 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from cart.cart import Cart
-from orders.selectors import get_tracked_active_orders
+from orders.selectors import get_delivery_fee_range, get_tracked_active_orders
 
-from .forms import CategoryForm, MenuItemForm
+from .forms import CategoryForm, MenuItemForm, RestaurantLogoForm
 from .models import BusinessHours, Category, MenuItem
 from .selectors import get_current_restaurant, get_open_status
 
@@ -54,6 +54,53 @@ def menu_list(request):
             'tracked_orders': get_tracked_active_orders(request),
         },
     )
+
+
+def restaurant_info(request):
+    """Página pública com todas as informações do estabelecimento."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    open_status = get_open_status(restaurant)
+    whatsapp_digits = ''.join(filter(str.isdigit, restaurant.whatsapp_number or ''))
+    fee_range = get_delivery_fee_range()
+
+    return render(
+        request,
+        'menu/restaurant_info.html',
+        {
+            'restaurant': restaurant,
+            'open_status': open_status,
+            'is_open': open_status['is_open'],
+            'week_hours': _build_week_hours(restaurant),
+            'whatsapp_digits': whatsapp_digits,
+            'delivery_fee_min': fee_range[0] if fee_range else None,
+            'delivery_fee_max': fee_range[1] if fee_range else None,
+            'has_fee_range': fee_range is not None,
+        },
+    )
+
+
+@staff_member_required
+def update_logo(request):
+    """Permite que o staff envie/altere o logo do estabelecimento."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    if request.method == 'POST':
+        form = RestaurantLogoForm(request.POST, request.FILES, instance=restaurant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Logo atualizado.')
+        else:
+            first_error = next(iter(form.errors.values()))[0]
+            messages.error(request, f'Não foi possível atualizar o logo: {first_error}')
+
+    return redirect('menu:restaurant_info')
 
 
 def _build_week_hours(restaurant):

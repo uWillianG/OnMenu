@@ -56,6 +56,65 @@ class MenuViewsTests(TestCase):
         self.assertContains(response, 'Adicionar ao carrinho')
 
 
+class RestaurantInfoTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Test Kitchen', slug='tk',
+            phone='1133334444', whatsapp_number='+55 (11) 99999-8888',
+            address='Rua Teste, 123', delivery_fee=Decimal('7.50'),
+            delivery_time_min=30, delivery_time_max=45,
+        )
+
+    def test_info_page_is_public_and_shows_data(self):
+        response = self.client.get(reverse('menu:restaurant_info'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test Kitchen')
+        self.assertContains(response, 'Rua Teste, 123')
+        self.assertContains(response, '1133334444')
+        self.assertContains(response, 'Horário de funcionamento')
+        # WhatsApp vira link wa.me com apenas dígitos.
+        self.assertContains(response, 'https://wa.me/5511999998888')
+
+    def test_info_page_lists_all_weekdays(self):
+        response = self.client.get(reverse('menu:restaurant_info'))
+        for _value, label in BusinessHours.DAY_CHOICES:
+            self.assertContains(response, label)
+
+    def test_delivery_fee_shown_as_range(self):
+        from orders.models import City, Neighborhood
+        city = City.objects.create(name='São Paulo', delivery_fee=Decimal('3.00'))
+        Neighborhood.objects.create(city=city, name='Centro', delivery_fee=Decimal('2.00'))
+        Neighborhood.objects.create(city=city, name='Zona Sul', delivery_fee=Decimal('6.00'))
+        response = self.client.get(reverse('menu:restaurant_info'))
+        # mín = 3+2 = 5,00 ; máx = 3+6 = 9,00
+        self.assertContains(response, '5,00')
+        self.assertContains(response, '9,00')
+        self.assertContains(response, '–')
+
+    def test_logo_upload_requires_staff(self):
+        self.assertEqual(
+            self.client.post(reverse('menu:update_logo')).status_code, 302
+        )
+
+    def test_staff_can_upload_logo(self):
+        import io
+        from PIL import Image
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        buffer = io.BytesIO()
+        Image.new('RGB', (10, 10), 'red').save(buffer, format='PNG')
+        logo = SimpleUploadedFile('logo.png', buffer.getvalue(), content_type='image/png')
+
+        staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+        self.client.force_login(staff)
+        self.client.post(reverse('menu:update_logo'), {'logo': logo})
+        self.restaurant.refresh_from_db()
+        self.assertTrue(self.restaurant.logo)
+        self.restaurant.logo.delete(save=False)  # limpa o arquivo de teste
+
+
 class ManageMenuTests(TestCase):
     def setUp(self):
         self.restaurant = Restaurant.objects.create(name='Test Kitchen', slug='tk')
