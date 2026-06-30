@@ -15,6 +15,67 @@ class RestaurantLogoForm(forms.ModelForm):
         self.fields['logo'].required = True
 
 
+class RestaurantInfoForm(forms.ModelForm):
+    """Edição dos dados de contato e entrega do estabelecimento (staff)."""
+
+    class Meta:
+        model = Restaurant
+        fields = [
+            'address',
+            'phone',
+            'whatsapp_number',
+            'delivery_time_min',
+            'delivery_time_max',
+        ]
+        labels = {
+            'address': 'Endereço',
+            'phone': 'Telefone',
+            'whatsapp_number': 'WhatsApp',
+            'delivery_time_min': 'Tempo mínimo (min)',
+            'delivery_time_max': 'Tempo máximo (min)',
+        }
+        help_texts = {
+            'whatsapp_number': 'Inclua o DDD. Vira um link wa.me automaticamente.',
+        }
+        widgets = {
+            'address': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Rua, número, bairro, cidade',
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': '(11) 3333-4444',
+                'inputmode': 'tel',
+            }),
+            'whatsapp_number': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': '(11) 99999-8888',
+                'inputmode': 'tel',
+            }),
+            'delivery_time_min': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': 0,
+                'placeholder': '30',
+            }),
+            'delivery_time_max': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': 0,
+                'placeholder': '45',
+            }),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        low = cleaned.get('delivery_time_min')
+        high = cleaned.get('delivery_time_max')
+        if low and high and low > high:
+            self.add_error(
+                'delivery_time_max',
+                'O tempo máximo deve ser maior ou igual ao tempo mínimo.',
+            )
+        return cleaned
+
+
 class BRLDecimalField(forms.DecimalField):
     """Aceita preços no formato brasileiro (ex.: "1.234,56") além do padrão."""
 

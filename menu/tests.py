@@ -91,6 +91,67 @@ class RestaurantInfoTests(TestCase):
         self.assertContains(response, '9,00')
         self.assertContains(response, '–')
 
+    def test_edit_info_requires_staff(self):
+        url = reverse('menu:edit_restaurant_info')
+        self.assertEqual(self.client.get(url).status_code, 302)
+        response = self.client.post(url, {'address': 'Hack', 'phone': '', 'whatsapp_number': ''})
+        self.assertEqual(response.status_code, 302)
+        self.restaurant.refresh_from_db()
+        self.assertEqual(self.restaurant.address, 'Rua Teste, 123')
+
+    def test_staff_sees_edit_info_page(self):
+        staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+        self.client.force_login(staff)
+        response = self.client.get(reverse('menu:edit_restaurant_info'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Editar informações')
+        self.assertContains(response, 'Rua Teste, 123')
+
+    def test_staff_can_edit_info(self):
+        staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+        self.client.force_login(staff)
+        response = self.client.post(
+            reverse('menu:edit_restaurant_info'),
+            {
+                'address': 'Av. Nova, 999',
+                'phone': '1144445555',
+                'whatsapp_number': '(11) 98888-7777',
+                'delivery_time_min': 20,
+                'delivery_time_max': 40,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.restaurant.refresh_from_db()
+        self.assertEqual(self.restaurant.address, 'Av. Nova, 999')
+        self.assertEqual(self.restaurant.phone, '1144445555')
+        self.assertEqual(self.restaurant.delivery_time_min, 20)
+        self.assertEqual(self.restaurant.delivery_time_max, 40)
+
+    def test_edit_info_rejects_inverted_delivery_time(self):
+        staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+        self.client.force_login(staff)
+        response = self.client.post(
+            reverse('menu:edit_restaurant_info'),
+            {
+                'address': 'Rua Teste, 123',
+                'phone': '',
+                'whatsapp_number': '',
+                'delivery_time_min': 60,
+                'delivery_time_max': 30,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'maior ou igual')
+        self.restaurant.refresh_from_db()
+        self.assertEqual(self.restaurant.delivery_time_min, 30)
+
     def test_logo_upload_requires_staff(self):
         self.assertEqual(
             self.client.post(reverse('menu:update_logo')).status_code, 302

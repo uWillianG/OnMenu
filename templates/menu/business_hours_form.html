@@ -132,12 +132,19 @@
   });
 
   // Destrava os mesmos campos para edição (sem trocar de layout).
-  editBt.addEventListener('click', () => {
+  function enterEdit() {
     form.classList.add('is-editing');
     editBt.hidden = true;
-  });
-  // Cancelar descarta as alterações recarregando o estado salvo.
-  cancel.addEventListener('click', () => window.location.reload());
+  }
+  editBt.addEventListener('click', enterEdit);
+  // Cancelar descarta as alterações recarregando o estado salvo
+  // (sem o ?edit=1, para não reabrir a edição automaticamente).
+  cancel.addEventListener('click', () => { window.location.href = window.location.pathname; });
+
+  // Quando chega pela tela de informações (?edit=1), já abre em edição.
+  if (new URLSearchParams(window.location.search).get('edit') === '1') {
+    enterEdit();
+  }
 })();
 </script>
 {% endblock %}

@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from cart.cart import Cart
 from orders.selectors import get_delivery_fee_range, get_tracked_active_orders
 
-from .forms import CategoryForm, MenuItemForm, RestaurantLogoForm
+from .forms import CategoryForm, MenuItemForm, RestaurantInfoForm, RestaurantLogoForm
 from .models import BusinessHours, Category, MenuItem
 from .selectors import get_current_restaurant, get_open_status
 
@@ -80,6 +80,30 @@ def restaurant_info(request):
             'delivery_fee_max': fee_range[1] if fee_range else None,
             'has_fee_range': fee_range is not None,
         },
+    )
+
+
+@staff_member_required
+def edit_restaurant_info(request):
+    """Edição (staff) dos dados de contato e entrega do estabelecimento."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    if request.method == 'POST':
+        form = RestaurantInfoForm(request.POST, instance=restaurant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Informações do estabelecimento atualizadas.')
+            return redirect('menu:restaurant_info')
+    else:
+        form = RestaurantInfoForm(instance=restaurant)
+
+    return render(
+        request,
+        'menu/restaurant_info_form.html',
+        {'form': form, 'restaurant': restaurant},
     )
 
 
