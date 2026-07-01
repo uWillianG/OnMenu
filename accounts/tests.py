@@ -194,7 +194,7 @@ class AuthFlowTests(TestCase):
             response, reverse('menu:menu_list'), fetch_redirect_response=False
         )
 
-    def test_login_without_next_sends_staff_to_panel(self):
+    def test_login_without_next_sends_staff_to_home(self):
         User.objects.create_user(
             username='equipe', password='Sup3rSecret!9', is_staff=True
         )
@@ -204,7 +204,7 @@ class AuthFlowTests(TestCase):
         )
         self.assertRedirects(
             response,
-            reverse('orders:staff_order_list'),
+            reverse('menu:menu_list'),
             fetch_redirect_response=False,
         )
 

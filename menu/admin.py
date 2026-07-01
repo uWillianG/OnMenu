@@ -3,8 +3,8 @@ from django.contrib import admin
 from .models import (
     BusinessHours,
     Category,
-    ItemOptionChoice,
-    ItemOptionGroup,
+    ComplementChoice,
+    ComplementGroup,
     MenuItem,
     Restaurant,
 )
@@ -44,24 +44,18 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('name', 'restaurant__name')
 
 
-class ItemOptionChoiceInline(admin.TabularInline):
-    model = ItemOptionChoice
+class ComplementChoiceInline(admin.TabularInline):
+    model = ComplementChoice
     extra = 1
     fields = ('name', 'extra_price', 'display_order')
 
 
-class ItemOptionGroupInline(admin.StackedInline):
-    model = ItemOptionGroup
-    extra = 0
-    fields = ('name', 'required', 'display_order')
-    show_change_link = True
-
-
-@admin.register(ItemOptionGroup)
-class ItemOptionGroupAdmin(admin.ModelAdmin):
-    list_display = ('name', 'menu_item', 'required', 'display_order')
-    list_filter = ('required',)
-    inlines = [ItemOptionChoiceInline]
+@admin.register(ComplementGroup)
+class ComplementGroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'restaurant', 'selection_type', 'required', 'display_order')
+    list_filter = ('restaurant', 'selection_type', 'required')
+    search_fields = ('name', 'restaurant__name')
+    inlines = [ComplementChoiceInline]
 
 
 @admin.register(MenuItem)
@@ -78,4 +72,4 @@ class MenuItemAdmin(admin.ModelAdmin):
     list_editable = ('price', 'is_available', 'is_featured', 'display_order')
     prepopulated_fields = {'slug': ('name',)}
     search_fields = ('name', 'description', 'category__name')
-    inlines = [ItemOptionGroupInline]
+    filter_horizontal = ('complement_groups',)

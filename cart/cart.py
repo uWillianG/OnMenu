@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.conf import settings
 
-from menu.models import ItemOptionChoice, MenuItem
+from menu.models import ComplementChoice, MenuItem
 
 
 class Cart:
@@ -43,7 +43,7 @@ class Cart:
         choice_map = {}
         all_ids = self._all_choice_ids()
         if all_ids:
-            choices = ItemOptionChoice.objects.select_related('group').filter(id__in=all_ids)
+            choices = ComplementChoice.objects.select_related('group').filter(id__in=all_ids)
             choice_map = {str(c.id): c for c in choices}
 
         for item_id in self.cart:

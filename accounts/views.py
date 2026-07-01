@@ -17,14 +17,10 @@ class CustomLoginView(LoginView):
     template_name = 'registration/login.html'
     authentication_form = LoginForm
     redirect_authenticated_user = True
+    extra_context = {'hide_cart': True}
 
     def get_default_redirect_url(self):
-        """Sem ?next=: staff vai ao painel; cliente vai ao cardápio.
-
-        Evita mandar um cliente comum para uma página @staff_member_required
-        (que o jogaria para o login do admin)."""
-        if self.request.user.is_staff:
-            return resolve_url('orders:staff_order_list')
+        """Sem ?next=: todos vão para a tela principal (cardápio)."""
         return resolve_url('menu:menu_list')
 
 
@@ -46,7 +42,11 @@ def signup(request):
     else:
         form = SignupForm()
 
-    return render(request, 'registration/signup.html', {'form': form, 'next': next_url})
+    return render(
+        request,
+        'registration/signup.html',
+        {'form': form, 'next': next_url, 'hide_cart': True},
+    )
 
 
 @login_required

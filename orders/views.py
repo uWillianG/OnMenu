@@ -754,7 +754,7 @@ def _rebuild_item_options(item, order_item):
     Retorna um dict {group_id: choice_id | [choice_ids]} no formato esperado
     pelo carrinho. Grupos/escolhas que não existem mais são ignorados.
     """
-    groups = {g.name: g for g in item.option_groups.prefetch_related('choices').all()}
+    groups = {g.name: g for g in item.complement_groups.prefetch_related('choices').all()}
     by_group = {}
     for opt in order_item.options.all():
         group = groups.get(opt.group_name)

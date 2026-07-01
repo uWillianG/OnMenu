@@ -87,6 +87,18 @@
           <label class="form-check">{{ form.is_featured }} <span>{{ form.is_featured.label }}</span></label>
         </div>
 
+        {% if form.complement_groups.field.queryset.exists %}
+          <div class="form-field">
+            <span class="form-label">{{ form.complement_groups.label }}</span>
+            <div class="check-list">
+              {% for choice in form.complement_groups %}
+                <label class="form-check">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+              {% endfor %}
+            </div>
+            {% if form.complement_groups.errors %}<ul class="errorlist">{% for e in form.complement_groups.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        {% endif %}
+
         <div class="hours-form-actions">
           <a class="btn-secondary" href="{% url 'menu:manage_menu' %}">Cancelar</a>
           <button type="submit" class="btn-primary">{% if is_edit %}Salvar alterações{% else %}Adicionar item{% endif %}</button>

@@ -17,5 +17,8 @@ urlpatterns = [
     path('staff/cardapio/item/<int:pk>/editar/', views.item_edit, name='item_edit'),
     path('staff/cardapio/item/<int:pk>/bloquear/', views.item_toggle_available, name='item_toggle_available'),
     path('staff/cardapio/item/<int:pk>/excluir/', views.item_delete, name='item_delete'),
+    path('staff/cardapio/complemento/novo/', views.complement_create, name='complement_create'),
+    path('staff/cardapio/complemento/<int:pk>/editar/', views.complement_edit, name='complement_edit'),
+    path('staff/cardapio/complemento/<int:pk>/excluir/', views.complement_delete, name='complement_delete'),
     path('items/<int:pk>/<slug:slug>/', views.item_detail, name='item_detail'),
 ]

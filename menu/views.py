@@ -9,8 +9,15 @@ from django.shortcuts import get_object_or_404, redirect, render
 from cart.cart import Cart
 from orders.selectors import get_delivery_fee_range, get_tracked_active_orders
 
-from .forms import CategoryForm, MenuItemForm, RestaurantInfoForm, RestaurantLogoForm
-from .models import BusinessHours, Category, MenuItem
+from .forms import (
+    CategoryForm,
+    ComplementChoiceFormSet,
+    ComplementGroupForm,
+    MenuItemForm,
+    RestaurantInfoForm,
+    RestaurantLogoForm,
+)
+from .models import BusinessHours, Category, ComplementGroup, MenuItem
 from .selectors import get_current_restaurant, get_open_status
 
 
@@ -27,7 +34,7 @@ def menu_list(request):
             Prefetch(
                 'items',
                 queryset=MenuItem.objects.order_by('display_order', 'name').prefetch_related(
-                    'option_groups__choices'
+                    'complement_groups__choices'
                 ),
             ),
         )
@@ -35,7 +42,7 @@ def menu_list(request):
             MenuItem.objects
             .filter(category__restaurant=restaurant, is_featured=True, is_available=True)
             .select_related('category')
-            .prefetch_related('option_groups__choices')
+            .prefetch_related('complement_groups__choices')
             .order_by('display_order', 'name')
         )
         open_status = get_open_status(restaurant)
@@ -212,6 +219,11 @@ def manage_menu(request):
         .order_by('display_order', 'name')
     )
     item_count = MenuItem.objects.filter(category__restaurant=restaurant).count()
+    complement_groups = (
+        restaurant.complement_groups
+        .prefetch_related('choices')
+        .order_by('display_order', 'name')
+    )
 
     return render(
         request,
@@ -221,6 +233,7 @@ def manage_menu(request):
             'categories': categories,
             'item_count': item_count,
             'category_form': CategoryForm(),
+            'complement_groups': complement_groups,
         },
     )
 
@@ -344,12 +357,85 @@ def item_delete(request, pk):
     return redirect('menu:manage_menu')
 
 
+@staff_member_required
+def complement_create(request):
+    """Cria um novo grupo de complementos (reutilizável) e suas opções."""
+    restaurant = get_current_restaurant()
+    if not restaurant:
+        messages.error(request, 'Restaurante não configurado.')
+        return redirect('menu:menu_list')
+
+    if request.method == 'POST':
+        form = ComplementGroupForm(request.POST)
+        formset = ComplementChoiceFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            group = form.save(commit=False)
+            group.restaurant = restaurant
+            group.save()
+            formset.instance = group
+            formset.save()
+            messages.success(request, f'Complemento “{group.name}” criado.')
+            return redirect('menu:manage_menu')
+    else:
+        form = ComplementGroupForm()
+        formset = ComplementChoiceFormSet()
+
+    return render(
+        request,
+        'menu/complement_form.html',
+        {'form': form, 'formset': formset, 'restaurant': restaurant, 'is_edit': False},
+    )
+
+
+@staff_member_required
+def complement_edit(request, pk):
+    """Edita um grupo de complementos existente e suas opções."""
+    restaurant = get_current_restaurant()
+    group = get_object_or_404(ComplementGroup, pk=pk, restaurant=restaurant)
+
+    if request.method == 'POST':
+        form = ComplementGroupForm(request.POST, instance=group)
+        formset = ComplementChoiceFormSet(request.POST, instance=group)
+        if form.is_valid() and formset.is_valid():
+            form.save()
+            formset.save()
+            messages.success(request, f'Complemento “{group.name}” atualizado.')
+            return redirect('menu:manage_menu')
+    else:
+        form = ComplementGroupForm(instance=group)
+        formset = ComplementChoiceFormSet(instance=group)
+
+    return render(
+        request,
+        'menu/complement_form.html',
+        {
+            'form': form,
+            'formset': formset,
+            'restaurant': restaurant,
+            'is_edit': True,
+            'group': group,
+        },
+    )
+
+
+@staff_member_required
+def complement_delete(request, pk):
+    """Exclui um grupo de complementos (desvincula dos itens automaticamente)."""
+    restaurant = get_current_restaurant()
+    group = get_object_or_404(ComplementGroup, pk=pk, restaurant=restaurant)
+    if request.method == 'POST':
+        name = group.name
+        group.delete()
+        messages.success(request, f'Complemento “{name}” excluído.')
+    return redirect('menu:manage_menu')
+
+
 def item_detail(request, pk, slug):
     restaurant = get_current_restaurant()
     item_queryset = MenuItem.objects.select_related(
         'category',
         'category__restaurant',
-    ).prefetch_related('option_groups__choices')
+    ).prefetch_related('complement_groups__choices')
     if restaurant:
         item_queryset = item_queryset.filter(category__restaurant=restaurant)
     item = get_object_or_404(item_queryset, pk=pk, slug=slug)

@@ -100,6 +100,11 @@ class MenuItem(models.Model):
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
     display_order = models.PositiveIntegerField(default=0)
+    complement_groups = models.ManyToManyField(
+        'ComplementGroup',
+        related_name='items',
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -127,13 +132,28 @@ class MenuItem(models.Model):
         return self.image_url
 
 
-class ItemOptionGroup(models.Model):
-    menu_item = models.ForeignKey(
-        MenuItem,
+class ComplementGroup(models.Model):
+    """Grupo de complementos reutilizável no nível do restaurante.
+
+    Ex.: 'Ponto do hambúrguer', 'Pão', 'Complementos'. Vincula-se a vários
+    itens via ``MenuItem.complement_groups``.
+    """
+
+    class SelectionType(models.TextChoices):
+        SINGLE = 'single', 'Escolha única'
+        MULTIPLE = 'multiple', 'Múltipla escolha'
+
+    restaurant = models.ForeignKey(
+        Restaurant,
         on_delete=models.CASCADE,
-        related_name='option_groups',
+        related_name='complement_groups',
     )
     name = models.CharField(max_length=120)
+    selection_type = models.CharField(
+        max_length=10,
+        choices=SelectionType.choices,
+        default=SelectionType.SINGLE,
+    )
     required = models.BooleanField(default=False)
     display_order = models.PositiveIntegerField(default=0)
 
@@ -141,12 +161,16 @@ class ItemOptionGroup(models.Model):
         ordering = ['display_order', 'name']
 
     def __str__(self):
-        return f'{self.menu_item} — {self.name}'
+        return self.name
+
+    @property
+    def is_single(self):
+        return self.selection_type == self.SelectionType.SINGLE
 
 
-class ItemOptionChoice(models.Model):
+class ComplementChoice(models.Model):
     group = models.ForeignKey(
-        ItemOptionGroup,
+        ComplementGroup,
         on_delete=models.CASCADE,
         related_name='choices',
     )

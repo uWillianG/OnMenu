@@ -11,6 +11,40 @@ from menu.models import Category, MenuItem, Restaurant
 from .models import CardPayment, City, Neighborhood, Notification, Order, PixPayment
 
 
+class OrderNumberSequenceTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Seq Kitchen', slug='seq')
+
+    def _make_order(self):
+        return Order.objects.create(
+            restaurant=self.restaurant, customer_name='Cliente', phone='000',
+        )
+
+    def test_numbers_are_sequential_starting_at_one(self):
+        first = self._make_order()
+        second = self._make_order()
+        third = self._make_order()
+        self.assertEqual(first.order_number, 'OM-1')
+        self.assertEqual(second.order_number, 'OM-2')
+        self.assertEqual(third.order_number, 'OM-3')
+
+    def test_legacy_format_orders_are_ignored(self):
+        # Pedido antigo no formato OM-AAAAMMDD-XXXXXX não interfere na sequência.
+        Order.objects.create(
+            restaurant=self.restaurant, customer_name='Antigo', phone='000',
+            order_number='OM-20250101-ABC123',
+        )
+        nxt = self._make_order()
+        self.assertEqual(nxt.order_number, 'OM-1')
+
+    def test_sequence_continues_after_highest(self):
+        self._make_order()  # OM-1
+        self._make_order()  # OM-2
+        # Remove o último; o próximo deve seguir a partir do maior existente (OM-1).
+        Order.objects.get(order_number='OM-2').delete()
+        self.assertEqual(self._make_order().order_number, 'OM-2')
+
+
 class OrderViewsTests(TestCase):
     def setUp(self):
         self.restaurant = Restaurant.objects.create(

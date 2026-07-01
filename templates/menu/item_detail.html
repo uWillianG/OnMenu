@@ -33,7 +33,7 @@
           {% csrf_token %}
           <input type="hidden" name="next" value="{% url 'cart:cart_detail' %}">
 
-          {% for group in item.option_groups.all %}
+          {% for group in item.complement_groups.all %}
             <div class="option-group">
               <div class="option-group-head">
                 <span>{{ group.name }}</span>
@@ -43,9 +43,13 @@
                 {% for choice in group.choices.all %}
                   <label class="option-choice">
                     <div class="choice-left">
-                      <input class="choice-radio" type="radio" name="option_group_{{ group.pk }}" value="{{ choice.pk }}"
-                        {% if forloop.first %}checked{% endif %}
-                        {% if group.required and forloop.first %}required{% endif %}>
+                      {% if group.is_single %}
+                        <input class="choice-radio" type="radio" name="option_group_{{ group.pk }}" value="{{ choice.pk }}"
+                          {% if forloop.first %}checked{% endif %}
+                          {% if group.required and forloop.first %}required{% endif %}>
+                      {% else %}
+                        <input class="choice-radio" type="checkbox" name="option_group_{{ group.pk }}" value="{{ choice.pk }}">
+                      {% endif %}
                       <span class="choice-name">{{ choice.name }}</span>
                     </div>
                     {% if choice.extra_price %}

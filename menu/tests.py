@@ -5,7 +5,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import BusinessHours, Category, MenuItem, Restaurant
+from .models import (
+    BusinessHours,
+    Category,
+    ComplementChoice,
+    ComplementGroup,
+    MenuItem,
+    Restaurant,
+)
 from .selectors import get_open_status
 
 
@@ -311,6 +318,169 @@ class ManageMenuTests(TestCase):
         self.client.force_login(self.staff)
         self.client.post(reverse('menu:item_delete', args=[item.pk]))
         self.assertFalse(MenuItem.objects.filter(pk=item.pk).exists())
+
+
+class ComplementTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Test Kitchen', slug='tk')
+        self.category = Category.objects.create(
+            restaurant=self.restaurant, name='Lanches', slug='lanches',
+        )
+        self.item = MenuItem.objects.create(
+            category=self.category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+        self.staff = get_user_model().objects.create_user(
+            username='admin', password='pw', is_staff=True,
+        )
+
+    def _group_with_choices(self):
+        group = ComplementGroup.objects.create(
+            restaurant=self.restaurant, name='Complementos',
+            selection_type='multiple', required=False,
+        )
+        ComplementChoice.objects.create(group=group, name='Bacon', extra_price=Decimal('5.00'))
+        return group
+
+    def test_create_requires_staff(self):
+        self.assertEqual(
+            self.client.get(reverse('menu:complement_create')).status_code, 302,
+        )
+
+    def test_staff_can_create_complement_with_choices(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_create'),
+            {
+                'name': 'Ponto do hambúrguer',
+                'selection_type': 'single',
+                'required': 'on',
+                'display_order': 10,
+                'choices-TOTAL_FORMS': 2,
+                'choices-INITIAL_FORMS': 0,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-name': 'Mal passado',
+                'choices-0-extra_price': '',
+                'choices-0-display_order': 0,
+                'choices-1-name': 'Ao ponto',
+                'choices-1-extra_price': '0,00',
+                'choices-1-display_order': 0,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        group = ComplementGroup.objects.get(name='Ponto do hambúrguer')
+        self.assertEqual(group.restaurant, self.restaurant)
+        self.assertEqual(group.selection_type, 'single')
+        self.assertTrue(group.required)
+        self.assertEqual(group.choices.count(), 2)
+        # Preço em branco vira 0,00 (campo NOT NULL).
+        self.assertEqual(group.choices.get(name='Mal passado').extra_price, Decimal('0.00'))
+
+    def test_create_ignores_blank_option_row(self):
+        # Uma linha em branco (o que resta após adicionar e excluir uma opção
+        # nova no formulário) não deve travar o salvamento.
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_create'),
+            {
+                'name': 'Molhos',
+                'selection_type': 'multiple',
+                'display_order': 0,
+                'choices-TOTAL_FORMS': 2,
+                'choices-INITIAL_FORMS': 0,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-name': 'Barbecue',
+                'choices-0-extra_price': '2,00',
+                'choices-0-display_order': 0,
+                # Linha 1 totalmente em branco (marcada como excluída pelo JS).
+                'choices-1-name': '',
+                'choices-1-extra_price': '',
+                'choices-1-display_order': '',
+                'choices-1-DELETE': 'on',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        group = ComplementGroup.objects.get(name='Molhos')
+        self.assertEqual(group.choices.count(), 1)
+        self.assertEqual(group.choices.first().name, 'Barbecue')
+
+    def test_manage_menu_lists_complements(self):
+        self._group_with_choices()
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('menu:manage_menu'))
+        self.assertContains(response, 'Complementos')
+        self.assertContains(response, 'Novo complemento')
+
+    def test_staff_can_edit_complement(self):
+        group = self._group_with_choices()
+        choice = group.choices.first()
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse('menu:complement_edit', args=[group.pk]),
+            {
+                'name': 'Adicionais',
+                'selection_type': 'multiple',
+                'display_order': 5,
+                'choices-TOTAL_FORMS': 1,
+                'choices-INITIAL_FORMS': 1,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-id': choice.pk,
+                'choices-0-name': 'Bacon duplo',
+                'choices-0-extra_price': '7,00',
+                'choices-0-display_order': 0,
+            },
+            follow=True,
+        )
+        group.refresh_from_db()
+        choice.refresh_from_db()
+        self.assertEqual(group.name, 'Adicionais')
+        self.assertEqual(choice.name, 'Bacon duplo')
+        self.assertEqual(choice.extra_price, Decimal('7.00'))
+
+    def test_staff_can_delete_complement_unlinks_item(self):
+        group = self._group_with_choices()
+        self.item.complement_groups.add(group)
+        self.client.force_login(self.staff)
+        self.client.post(reverse('menu:complement_delete', args=[group.pk]))
+        self.assertFalse(ComplementGroup.objects.filter(pk=group.pk).exists())
+        self.assertEqual(self.item.complement_groups.count(), 0)
+
+    def test_item_form_links_complement_groups(self):
+        group = self._group_with_choices()
+        self.client.force_login(self.staff)
+        self.client.post(
+            reverse('menu:item_edit', args=[self.item.pk]),
+            {
+                'category': self.category.pk,
+                'name': 'Burger',
+                'description': '',
+                'price': '20,00',
+                'image_url': '',
+                'display_order': 0,
+                'is_available': 'on',
+                'complement_groups': [group.pk],
+            },
+            follow=True,
+        )
+        self.assertIn(group, self.item.complement_groups.all())
+
+    def test_cart_adds_choice_extra_price(self):
+        group = self._group_with_choices()
+        self.item.complement_groups.add(group)
+        choice = group.choices.get(name='Bacon')
+        response = self.client.post(
+            reverse('cart:cart_add', args=[self.item.pk]),
+            {'quantity': 1, f'option_group_{group.pk}': choice.pk},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        # 20,00 (item) + 5,00 (Bacon) = 25,00
+        self.assertContains(response, '25,00')
 
 
 class BusinessHoursTests(TestCase):

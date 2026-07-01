@@ -143,8 +143,8 @@
                  data-desc="{{ item.description }}"
                  data-image="{% if item.image %}{{ item.image.url }}{% elif item.image_url %}{{ item.image_url }}{% else %}{% static 'img/placeholder-food.svg' %}{% endif %}"
                  data-url="{% url 'cart:cart_add' item.pk %}">
-              {% for group in item.option_groups.all %}
-                <span data-gid="{{ group.pk }}" data-gname="{{ group.name }}" data-req="{{ group.required|yesno:'true,false' }}">
+              {% for group in item.complement_groups.all %}
+                <span data-gid="{{ group.pk }}" data-gname="{{ group.name }}" data-req="{{ group.required|yesno:'true,false' }}" data-selection="{{ group.selection_type }}">
                   {% for c in group.choices.all %}
                     <span data-cid="{{ c.pk }}" data-cname="{{ c.name }}" data-extra="{{ c.extra_price }}"></span>
                   {% endfor %}
@@ -325,9 +325,13 @@
     const choices   = groupEl.querySelectorAll('[data-cid]');
     if (!choices.length) return null;
     const required  = groupEl.dataset.req === 'true';
-    const inputType = required ? 'radio' : 'checkbox';
+    const single    = groupEl.dataset.selection !== 'multiple';
+    const inputType = single ? 'radio' : 'checkbox';
     const wrap = document.createElement('div');
     wrap.className = 'modal-group';
+    wrap.dataset.required = required ? '1' : '';
+    wrap.dataset.single = single ? '1' : '';
+    wrap.dataset.gname = groupEl.dataset.gname;
     const titleRow = document.createElement('div');
     titleRow.className = 'modal-group-title';
     titleRow.textContent = groupEl.dataset.gname;
@@ -351,7 +355,8 @@
       input.name = 'option_group_' + groupEl.dataset.gid;
       input.value = c.dataset.cid;
       input.dataset.extra = c.dataset.extra;
-      if (inputType === 'radio' && i === 0) input.checked = true;
+      // Auto-seleciona a 1ª opção só quando é escolha única obrigatória.
+      if (inputType === 'radio' && required && i === 0) input.checked = true;
       const lbl = document.createElement('span');
       lbl.className = 'modal-choice-label';
       lbl.textContent = c.dataset.cname;
@@ -361,7 +366,7 @@
       price.textContent = extra > 0 ? '+' + fmt(extra) : 'Incluso';
       const toggle = document.createElement('span');
       toggle.className = 'modal-choice-toggle';
-      setToggleIcon(toggle, inputType === 'radio' && i === 0);
+      setToggleIcon(toggle, inputType === 'radio' && required && i === 0);
       label.append(input, lbl, price, toggle);
       if (inputType === 'checkbox') {
         label.addEventListener('click', (e) => {
@@ -425,6 +430,20 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
   qtyMinus.addEventListener('click', () => setQty(qty - 1));
   qtyPlus.addEventListener('click',  () => setQty(qty + 1));
+
+  // Bloqueia envio se algum grupo obrigatório estiver sem seleção.
+  modalForm.addEventListener('submit', (e) => {
+    const groups = modalGroups.querySelectorAll('.modal-group[data-required="1"]');
+    for (const g of groups) {
+      const checked = g.querySelector('input:checked');
+      if (!checked) {
+        e.preventDefault();
+        alert('Escolha uma opção em “' + (g.dataset.gname || 'complemento obrigatório') + '”.');
+        g.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+    }
+  });
 })();
 </script>
 {% endblock %}

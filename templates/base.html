@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=111">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=113">
 </head>
 <body>
 
@@ -31,6 +31,7 @@
           {% if unread_notifications_count %}<span class="bell-badge">{{ unread_notifications_count }}</span>{% endif %}
         </a>
       {% endif %}
+      {% if not hide_cart %}
       <a class="cart-btn" href="{% url 'cart:cart_detail' %}" aria-label="Carrinho">
         <svg class="cart-btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
         <span class="cart-btn-count">{{ cart_item_count }}</span>
@@ -38,6 +39,7 @@
           <span id="cart-btn-total">{{ currency_symbol }} {{ cart_subtotal|floatformat:2 }}</span>
         {% endif %}
       </a>
+      {% endif %}
     </div>
     {% endif %}
   </header>
@@ -84,6 +86,11 @@
           </span> Carrinho
           {% if cart_item_count > 0 %}<span class="sidebar-badge">{{ cart_item_count }}</span>{% endif %}
         </a>
+        <a class="sidebar-link {% if view == 'menu:restaurant_info' %}is-active{% endif %}" href="{% url 'menu:restaurant_info' %}">
+          <span class="sidebar-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </span> Informações
+        </a>
         {% if request.user.is_staff %}
         <span class="sidebar-section">Gerência</span>
         <a class="sidebar-link {% if view == 'menu:manage_menu' %}is-active{% endif %}" href="{% url 'menu:manage_menu' %}">
@@ -113,12 +120,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
           </span> Cadastre-se
         </a>
+        <a class="sidebar-link {% if view == 'menu:restaurant_info' %}is-active{% endif %}" href="{% url 'menu:restaurant_info' %}">
+          <span class="sidebar-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </span> Informações
+        </a>
       {% endif %}
-      <a class="sidebar-link {% if view == 'menu:restaurant_info' %}is-active{% endif %}" href="{% url 'menu:restaurant_info' %}">
-        <span class="sidebar-ico">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        </span> Informações
-      </a>
     </nav>
     {% endwith %}
     {% if request.user.is_authenticated %}

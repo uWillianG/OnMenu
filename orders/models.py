@@ -1,5 +1,4 @@
 from decimal import Decimal
-import uuid
 
 from django.conf import settings
 from django.db import models
@@ -9,9 +8,27 @@ from menu.models import MenuItem, Restaurant
 
 
 def generate_order_number():
-    date_part = timezone.now().strftime('%Y%m%d')
-    random_part = uuid.uuid4().hex[:6].upper()
-    return f'OM-{date_part}-{random_part}'
+    """Número sequencial do pedido: OM-1, OM-2, OM-3, …
+
+    Considera apenas pedidos no formato novo (``OM-<n>``). Pedidos antigos no
+    formato ``OM-AAAAMMDD-XXXXXX`` são ignorados, então a sequência recomeça do 1.
+    Deve ser chamada dentro da transação que cria o pedido (checkout já é
+    ``@transaction.atomic``); a constraint UNIQUE protege contra colisões.
+    """
+    last = (
+        Order.objects
+        .filter(order_number__regex=r'^OM-\d+$')
+        .order_by('-id')
+        .values_list('order_number', flat=True)
+        .first()
+    )
+    last_number = 0
+    if last:
+        try:
+            last_number = int(last.rsplit('-', 1)[1])
+        except (IndexError, ValueError):
+            last_number = 0
+    return f'OM-{last_number + 1}'
 
 
 class City(models.Model):

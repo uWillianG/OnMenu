@@ -1,6 +1,14 @@
+from decimal import Decimal
+
 from django import forms
 
-from .models import Category, MenuItem, Restaurant
+from .models import (
+    Category,
+    ComplementChoice,
+    ComplementGroup,
+    MenuItem,
+    Restaurant,
+)
 
 
 class RestaurantLogoForm(forms.ModelForm):
@@ -134,6 +142,7 @@ class MenuItemForm(forms.ModelForm):
             'is_available',
             'is_featured',
             'display_order',
+            'complement_groups',
         ]
         labels = {
             'category': 'Categoria',
@@ -144,6 +153,7 @@ class MenuItemForm(forms.ModelForm):
             'is_available': 'Disponível para venda',
             'is_featured': 'Destacar na tela inicial',
             'display_order': 'Ordem de exibição',
+            'complement_groups': 'Complementos aplicáveis a este item',
         }
         help_texts = {
             'image_url': 'Use um link de imagem caso não vá enviar um arquivo.',
@@ -165,6 +175,7 @@ class MenuItemForm(forms.ModelForm):
                 'placeholder': 'https://…',
             }),
             'display_order': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),
+            'complement_groups': forms.CheckboxSelectMultiple(),
         }
 
     def __init__(self, *args, restaurant=None, **kwargs):
@@ -173,4 +184,76 @@ class MenuItemForm(forms.ModelForm):
             self.fields['category'].queryset = Category.objects.filter(
                 restaurant=restaurant,
             ).order_by('display_order', 'name')
+            self.fields['complement_groups'].queryset = ComplementGroup.objects.filter(
+                restaurant=restaurant,
+            ).order_by('display_order', 'name')
         self.fields['category'].empty_label = 'Selecione uma categoria'
+        self.fields['complement_groups'].required = False
+
+
+class ComplementGroupForm(forms.ModelForm):
+    """Cadastro/edição de um grupo de complementos (ex.: Ponto, Pão)."""
+
+    class Meta:
+        model = ComplementGroup
+        fields = ['name', 'selection_type', 'required', 'display_order']
+        labels = {
+            'name': 'Nome do complemento',
+            'selection_type': 'Tipo de escolha',
+            'required': 'Obrigatório',
+            'display_order': 'Ordem de exibição',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ex.: Ponto do hambúrguer, Pão, Adicionais',
+            }),
+            'selection_type': forms.Select(attrs={'class': 'form-select'}),
+            'display_order': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),
+        }
+
+
+class ComplementChoiceForm(forms.ModelForm):
+    """Uma opção dentro de um grupo de complementos."""
+
+    extra_price = BRLDecimalField(
+        label='Preço adicional (R$)',
+        max_digits=8,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input money-mask',
+            'inputmode': 'decimal',
+            'placeholder': '0,00',
+            'autocomplete': 'off',
+        }),
+    )
+
+    class Meta:
+        model = ComplementChoice
+        fields = ['name', 'extra_price', 'display_order']
+        labels = {
+            'name': 'Opção',
+            'display_order': 'Ordem',
+        }
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'Ex.: Bacon crocante',
+            }),
+            'display_order': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),
+        }
+
+    def clean_extra_price(self):
+        # Campo em branco = sem custo adicional (o modelo é NOT NULL).
+        return self.cleaned_data.get('extra_price') or Decimal('0.00')
+
+
+ComplementChoiceFormSet = forms.inlineformset_factory(
+    ComplementGroup,
+    ComplementChoice,
+    form=ComplementChoiceForm,
+    extra=1,
+    can_delete=True,
+)

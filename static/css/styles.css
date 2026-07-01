@@ -3361,10 +3361,77 @@ body.has-bulk-bar { padding-bottom: 96px; }
   cursor: pointer;
 }
 .form-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+.form-check input[type="radio"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+
+/* Lista de checkboxes (complementos aplicáveis ao item) */
+.check-list {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+/* Editor de opções do complemento (formset) */
+.complement-options { display: grid; gap: 10px; padding: 4px 0; }
+.option-rows { display: grid; gap: 10px; }
+.option-row {
+  display: grid;
+  grid-template-columns: 1fr 140px auto;
+  gap: 10px;
+  align-items: start;
+}
+.option-row .form-field { margin: 0; }
+.option-row-removed { opacity: .45; }
+.option-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  background: var(--surface);
+}
+.option-remove:hover { color: var(--primary); border-color: var(--primary); }
+.option-remove svg { width: 18px; height: 18px; }
+.option-remove input[type="checkbox"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.option-remove:has(input:checked) { color: var(--primary); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+/* Botão "Adicionar opção": afordância de inserção, tracejada e discreta */
+.option-add {
+  width: 100%;
+  justify-self: stretch;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 12px 18px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  font-weight: 700;
+  transition: border-color .15s, color .15s, background .15s, transform .12s;
+}
+.option-add svg {
+  width: 17px;
+  height: 17px;
+  transition: transform .15s;
+}
+.option-add:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  border-style: solid;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+}
+.option-add:hover svg { transform: rotate(90deg); }
+.option-add:active { transform: scale(.99); }
 
 @media (max-width: 480px) {
   .manage-form-row { grid-template-columns: 1fr; }
   .manage-item-price { font-size: .9rem; }
+  .option-row { grid-template-columns: 1fr 110px auto; }
 }
 
 /* ── Página de informações do estabelecimento ───────────────── */

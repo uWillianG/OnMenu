@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if is_edit %}Editar complemento{% else %}Novo complemento{% endif %} | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="staff-page">
+
+    <div class="split-heading">
+      <h1 class="page-h1">
+        <svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.4H22l-6 4.3 2.3 7.3-6.3-4.6L5.7 21 8 14 2 9.7h7.6z"/></svg>
+        {% if is_edit %}Editar complemento{% else %}Novo complemento{% endif %}
+      </h1>
+      <a class="btn-secondary" href="{% url 'menu:manage_menu' %}">Voltar</a>
+    </div>
+
+    <div class="detail-card">
+      <form method="post" class="manage-item-form" novalidate>
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <div class="form-field">
+          <label class="form-label" for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.errors %}<ul class="errorlist">{% for e in form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+
+        <div class="manage-form-row">
+          <div class="form-field">
+            <label class="form-label" for="{{ form.selection_type.id_for_label }}">{{ form.selection_type.label }}</label>
+            {{ form.selection_type }}
+            {% if form.selection_type.errors %}<ul class="errorlist">{% for e in form.selection_type.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="{{ form.display_order.id_for_label }}">{{ form.display_order.label }}</label>
+            {{ form.display_order }}
+            {% if form.display_order.errors %}<ul class="errorlist">{% for e in form.display_order.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+        </div>
+
+        <div class="manage-checks">
+          <label class="form-check">{{ form.required }} <span>{{ form.required.label }} <small class="form-label-opt">(cliente precisa escolher)</small></span></label>
+        </div>
+
+        {# ── Opções do complemento (formset) ── #}
+        <div class="complement-options">
+          <span class="form-label">Opções</span>
+          {{ formset.management_form }}
+          {% if formset.non_form_errors %}
+            <ul class="errorlist">{% for e in formset.non_form_errors %}<li>{{ e }}</li>{% endfor %}</ul>
+          {% endif %}
+
+          <div class="option-rows" data-option-rows>
+            {% for choice_form in formset %}
+              <div class="option-row" data-option-row>
+                {% for hidden in choice_form.hidden_fields %}{{ hidden }}{% endfor %}
+                <div class="form-field option-name">
+                  {{ choice_form.name }}
+                  {% if choice_form.name.errors %}<ul class="errorlist">{% for e in choice_form.name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                <div class="form-field option-price">
+                  {{ choice_form.extra_price }}
+                  {% if choice_form.extra_price.errors %}<ul class="errorlist">{% for e in choice_form.extra_price.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+                </div>
+                <label class="option-remove" title="Remover opção">
+                  {{ choice_form.DELETE }}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </label>
+              </div>
+            {% endfor %}
+          </div>
+
+          {# Template (oculto) para novas linhas #}
+          <template data-empty-row>
+            <div class="option-row" data-option-row>
+              <div class="form-field option-name">{{ formset.empty_form.name }}</div>
+              <div class="form-field option-price">{{ formset.empty_form.extra_price }}</div>
+              <label class="option-remove" title="Remover opção">
+                {{ formset.empty_form.DELETE }}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </label>
+            </div>
+          </template>
+
+          <button type="button" class="btn-secondary option-add" data-add-option>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Adicionar opção
+          </button>
+        </div>
+
+        <div class="hours-form-actions">
+          <a class="btn-secondary" href="{% url 'menu:manage_menu' %}">Cancelar</a>
+          <button type="submit" class="btn-primary">{% if is_edit %}Salvar alterações{% else %}Criar complemento{% endif %}</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* ── Máscara automática de moeda (pt-BR) ─────────────────────── */
+function formatBRL(raw) {
+  var digits = (raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  digits = digits.slice(0, 10);
+  while (digits.length < 3) digits = '0' + digits;
+  var cents = digits.slice(-2);
+  var intPart = digits.slice(0, -2).replace(/^0+(?=\d)/, '');
+  intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return intPart + ',' + cents;
+}
+function bindMoneyMask(el) {
+  if (el.dataset.maskBound) return;
+  el.dataset.maskBound = '1';
+  if (el.value) el.value = formatBRL(el.value);
+  el.addEventListener('input', function () { el.value = formatBRL(el.value); });
+}
+document.querySelectorAll('.money-mask').forEach(bindMoneyMask);
+
+/* ── Formset dinâmico de opções ─────────────────────────────── */
+(function () {
+  var rows = document.querySelector('[data-option-rows]');
+  var tpl = document.querySelector('[data-empty-row]');
+  var addBtn = document.querySelector('[data-add-option]');
+  if (!rows || !tpl || !addBtn) return;
+
+  var totalInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+  var initialInput = document.querySelector('input[name$="-INITIAL_FORMS"]');
+  var prefix = totalInput.name.replace('-TOTAL_FORMS', '');
+
+  function formIndex(row) {
+    var f = row.querySelector('input[name$="-name"]');
+    if (!f) return -1;
+    var m = f.name.match(/-(\d+)-name$/);
+    return m ? parseInt(m[1], 10) : -1;
+  }
+
+  // Linhas de opção em branco são válidas (ignoradas pelo servidor); tira a
+  // validação nativa "campo obrigatório" para não travar o envio.
+  function relaxRequired(scope) {
+    scope.querySelectorAll('input[name$="-name"]').forEach(function (i) {
+      i.removeAttribute('required');
+    });
+  }
+  relaxRequired(rows);
+
+  addBtn.addEventListener('click', function () {
+    var index = parseInt(totalInput.value, 10);
+    var html = tpl.innerHTML.replace(/__prefix__/g, index);
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html.trim();
+    var row = wrap.firstElementChild;
+    rows.appendChild(row);
+    totalInput.value = index + 1;
+    relaxRequired(row);
+    row.querySelectorAll('.money-mask').forEach(bindMoneyMask);
+    var firstInput = row.querySelector('input[type="text"]');
+    if (firstInput) firstInput.focus();
+  });
+
+  /* Remover opção: linha nova (ainda não salva) some do DOM; linha já
+     salva é marcada com o checkbox DELETE para o servidor removê-la. */
+  rows.addEventListener('click', function (e) {
+    var label = e.target.closest('.option-remove');
+    if (!label) return;
+    var row = label.closest('[data-option-row]');
+    if (!row) return;
+    var initialCount = parseInt(initialInput.value, 10) || 0;
+    if (formIndex(row) >= initialCount) {
+      e.preventDefault();  // não alterna o checkbox — a linha é descartada
+      row.remove();
+    }
+  });
+
+  rows.addEventListener('change', function (e) {
+    if (!e.target.matches('input[type="checkbox"][name$="-DELETE"]')) return;
+    var row = e.target.closest('[data-option-row]');
+    if (row) row.classList.toggle('option-row-removed', e.target.checked);
+  });
+})();
+</script>
+{% endblock %}

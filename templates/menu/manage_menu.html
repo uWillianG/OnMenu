@@ -39,6 +39,55 @@
       </form>
     </details>
 
+    {# ── Complementos (catálogo reutilizável entre itens) ── #}
+    <details class="detail-card manage-cat manage-complements">
+      <summary class="manage-cat-head">
+        <span class="manage-cat-title">
+          <h2>Complementos</h2>
+          <span class="manage-cat-count">{{ complement_groups|length }} grupo{{ complement_groups|length|pluralize }}</span>
+        </span>
+        <span class="section-chevron">▼</span>
+      </summary>
+
+      <div class="manage-cat-body">
+        <div class="manage-cat-toolbar">
+          <a class="btn-secondary manage-add-item" href="{% url 'menu:complement_create' %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo complemento
+          </a>
+        </div>
+
+        {% for group in complement_groups %}
+          <div class="manage-item">
+            <div class="manage-item-info">
+              <span class="manage-item-name">{{ group.name }}</span>
+              <span class="manage-item-meta">
+                <span class="manage-tag muted">{{ group.get_selection_type_display }}</span>
+                {% if group.required %}<span class="manage-tag accent">Obrigatório</span>{% endif %}
+                <span class="manage-tag muted">{{ group.choices.all|length }} opç{{ group.choices.all|length|pluralize:"ão,ões" }}</span>
+              </span>
+            </div>
+            <div class="manage-item-actions">
+              <a class="card-icon-btn" href="{% url 'menu:complement_edit' group.id %}" title="Editar complemento" aria-label="Editar complemento">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </a>
+              <form method="post" action="{% url 'menu:complement_delete' group.id %}"
+                    onsubmit="return confirm('Excluir o complemento “{{ group.name|escapejs }}”? Ele será removido de todos os itens.');">
+                {% csrf_token %}
+                <button type="submit" class="card-icon-btn danger" title="Excluir complemento" aria-label="Excluir complemento">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="manage-cat-empty">Nenhum complemento cadastrado ainda.
+            <a href="{% url 'menu:complement_create' %}">Criar o primeiro</a>.
+          </p>
+        {% endfor %}
+      </div>
+    </details>
+
     {# ── Categorias e itens (recolhidas; clique para listar) ── #}
     {% for category in categories %}
       <details class="detail-card manage-cat">
