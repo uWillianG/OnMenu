@@ -408,6 +408,101 @@ class ComplementTests(TestCase):
         self.assertEqual(group.choices.count(), 1)
         self.assertEqual(group.choices.first().name, 'Barbecue')
 
+    def test_create_rejects_nameless_row_with_price(self):
+        # Linha com preço (0,00) mas sem nome não pode ser salva "em branco":
+        # o servidor rejeita exigindo o nome (não descarta silenciosamente).
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_create'),
+            {
+                'name': 'Ponto',
+                'selection_type': 'single',
+                'required': 'on',
+                'display_order': 0,
+                'choices-TOTAL_FORMS': 2,
+                'choices-INITIAL_FORMS': 0,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-name': 'Ao ponto',
+                'choices-0-extra_price': '0,00',
+                'choices-1-name': '',
+                'choices-1-extra_price': '0,00',
+            },
+        )
+        self.assertEqual(response.status_code, 200)  # re-renderiza com erro
+        self.assertContains(response, 'obrigatório')
+        self.assertFalse(ComplementGroup.objects.filter(name='Ponto').exists())
+
+    def test_create_ignores_empty_untouched_row(self):
+        # Linha totalmente em branco (sem nome e sem preço) e não excluída é
+        # ignorada — desde que exista ao menos uma opção válida.
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_create'),
+            {
+                'name': 'Ponto',
+                'selection_type': 'single',
+                'required': 'on',
+                'display_order': 0,
+                'choices-TOTAL_FORMS': 2,
+                'choices-INITIAL_FORMS': 0,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-name': 'Ao ponto',
+                'choices-0-extra_price': '0,00',
+                'choices-1-name': '',
+                'choices-1-extra_price': '',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        group = ComplementGroup.objects.get(name='Ponto')
+        self.assertEqual(group.choices.count(), 1)
+
+    def test_create_rejects_group_without_options(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_create'),
+            {
+                'name': 'Vazio',
+                'selection_type': 'single',
+                'display_order': 0,
+                'choices-TOTAL_FORMS': 1,
+                'choices-INITIAL_FORMS': 0,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-name': '',
+                'choices-0-extra_price': '',
+            },
+        )
+        self.assertEqual(response.status_code, 200)  # re-renderiza com erro
+        self.assertContains(response, 'pelo menos uma opção')
+        self.assertFalse(ComplementGroup.objects.filter(name='Vazio').exists())
+
+    def test_edit_without_touching_options_keeps_them(self):
+        group = self._group_with_choices()  # 1 opção: Bacon
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('menu:complement_edit', args=[group.pk]),
+            {
+                'name': 'Complementos renomeado',
+                'selection_type': 'multiple',
+                'display_order': 0,
+                'choices-TOTAL_FORMS': 1,
+                'choices-INITIAL_FORMS': 1,
+                'choices-MIN_NUM_FORMS': 0,
+                'choices-MAX_NUM_FORMS': 1000,
+                'choices-0-id': group.choices.first().pk,
+                'choices-0-name': 'Bacon',
+                'choices-0-extra_price': '5,00',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        group.refresh_from_db()
+        self.assertEqual(group.name, 'Complementos renomeado')
+        self.assertEqual(group.choices.count(), 1)
+
     def test_manage_menu_lists_complements(self):
         self._group_with_choices()
         self.client.force_login(self.staff)

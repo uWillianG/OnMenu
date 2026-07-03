@@ -232,17 +232,15 @@ class ComplementChoiceForm(forms.ModelForm):
 
     class Meta:
         model = ComplementChoice
-        fields = ['name', 'extra_price', 'display_order']
+        fields = ['name', 'extra_price']
         labels = {
             'name': 'Opção',
-            'display_order': 'Ordem',
         }
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Ex.: Bacon crocante',
             }),
-            'display_order': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),
         }
 
     def clean_extra_price(self):
@@ -250,10 +248,30 @@ class ComplementChoiceForm(forms.ModelForm):
         return self.cleaned_data.get('extra_price') or Decimal('0.00')
 
 
+class BaseComplementChoiceFormSet(forms.BaseInlineFormSet):
+    """Exige pelo menos uma opção com nome preenchido."""
+
+    def clean(self):
+        super().clean()
+        if any(self.errors):
+            return
+        # Conta linhas que vão persistir: existentes não excluídas + novas com
+        # nome preenchido (has_changed é False para linhas em branco).
+        valid = sum(
+            1
+            for form in self.forms
+            if not self._should_delete_form(form)
+            and (form.instance.pk or form.has_changed())
+        )
+        if valid < 1:
+            raise forms.ValidationError('Adicione pelo menos uma opção ao complemento.')
+
+
 ComplementChoiceFormSet = forms.inlineformset_factory(
     ComplementGroup,
     ComplementChoice,
     form=ComplementChoiceForm,
-    extra=1,
+    formset=BaseComplementChoiceFormSet,
+    extra=0,
     can_delete=True,
 )

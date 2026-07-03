@@ -1991,6 +1991,22 @@ a.hero-chip-action:hover { color: var(--primary); border-color: var(--primary); 
   font-weight: 700;
 }
 
+/* Campo com erro de validação (destaque vermelho) */
+.form-input.is-invalid,
+.form-select.is-invalid,
+.form-textarea.is-invalid {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 15%, transparent);
+}
+.field-error {
+  margin-top: 6px;
+  color: var(--warning);
+  font-size: .82rem;
+  font-weight: 700;
+}
+/* Numa linha de opção (grid), a mensagem cruza todas as colunas */
+.option-row .field-error { grid-column: 1 / -1; margin-top: 2px; }
+
 /* ── Item Detail page ───────────────────────────────────────── */
 .detail-layout {
   display: grid;
@@ -3175,8 +3191,35 @@ body.has-bulk-bar { padding-bottom: 96px; }
 }
 
 /* ── Gerenciar cardápio (admin) ─────────────────────────────── */
+.manage-menu { gap: 14px; }
 .manage-menu .split-heading { align-items: center; }
 .manage-sub { color: var(--muted); font-size: .9rem; margin: -8px 0 4px; }
+
+/* chips de resumo (itens · categorias · complementos) */
+.manage-chips { margin-top: -4px; }
+.manage-chips .hero-chip strong { color: var(--primary); font-weight: 800; }
+
+/* rótulos de seção */
+.manage-section-label {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+  margin: 6px 2px -6px;
+}
+
+/* chip de ícone nos cabeçalhos recolhíveis */
+.manage-cat-ico {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--primary);
+}
+.manage-cat-ico svg { width: 18px; height: 18px; }
 
 .card-icon-btn.danger:hover { color: var(--warning); border-color: var(--warning); }
 .card-icon-btn.is-blocked { color: var(--warning); border-color: var(--warning); background: var(--primary-soft); }
@@ -3209,7 +3252,9 @@ body.has-bulk-bar { padding-bottom: 96px; }
 }
 
 /* categoria (recolhível) */
-.manage-cat { padding: 0; overflow: hidden; display: block; }
+.manage-cat { padding: 0; overflow: hidden; display: block; box-shadow: var(--shadow-xs); transition: box-shadow .15s; }
+.manage-cat:hover { box-shadow: var(--shadow-sm); }
+.manage-cat[open] { box-shadow: var(--shadow-sm); }
 .manage-cat-head {
   cursor: pointer;
   list-style: none;
@@ -3228,7 +3273,11 @@ body.has-bulk-bar { padding-bottom: 96px; }
 .manage-cat[open] .section-chevron { transform: rotate(180deg); }
 .manage-cat-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
 .manage-cat-title h2 { font-size: 1.1rem; font-weight: 800; letter-spacing: -.3px; }
-.manage-cat-count { font-size: .8rem; font-weight: 700; color: var(--muted); }
+.manage-cat-count {
+  font-size: .74rem; font-weight: 700; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border);
+  padding: 2px 9px; border-radius: 999px;
+}
 
 /* barra de ações dentro da categoria expandida */
 .manage-cat-toolbar {
@@ -3265,7 +3314,9 @@ body.has-bulk-bar { padding-bottom: 96px; }
   gap: 12px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
+  transition: background .12s;
 }
+.manage-item:hover { background: var(--surface-2); }
 .manage-item:last-child { border-bottom: none; }
 .manage-item-thumb {
   flex-shrink: 0;

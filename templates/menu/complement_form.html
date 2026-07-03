@@ -183,6 +183,57 @@ document.querySelectorAll('.money-mask').forEach(bindMoneyMask);
     var row = e.target.closest('[data-option-row]');
     if (row) row.classList.toggle('option-row-removed', e.target.checked);
   });
+
+  // Bloqueia o envio se alguma opção visível estiver sem nome (não permite
+  // salvar opção em branco — o usuário deve preencher ou remover a linha).
+  function rowInputs(row) {
+    return row.querySelectorAll('input[name$="-name"], input[name$="-extra_price"]');
+  }
+  function clearRowError(row) {
+    rowInputs(row).forEach(function (i) { i.classList.remove('is-invalid'); });
+    var msg = row.querySelector('.field-error');
+    if (msg) msg.remove();
+  }
+  function setRowError(row) {
+    rowInputs(row).forEach(function (i) { i.classList.add('is-invalid'); });
+    if (!row.querySelector('.field-error')) {
+      var msg = document.createElement('div');
+      msg.className = 'field-error';
+      msg.textContent = 'Preencha o nome da opção ou remova a linha em branco.';
+      row.appendChild(msg);
+    }
+  }
+  rows.addEventListener('input', function (e) {
+    if (e.target.matches('input[name$="-name"]') && e.target.value.trim()) {
+      clearRowError(e.target.closest('[data-option-row]'));
+    }
+  });
+
+  var formEl = rows.closest('form');
+  if (formEl) {
+    formEl.addEventListener('submit', function (e) {
+      var first = null;
+      rows.querySelectorAll('[data-option-row]').forEach(function (row) {
+        var del = row.querySelector('input[name$="-DELETE"]');
+        var nameInput = row.querySelector('input[name$="-name"]');
+        if (!nameInput) return;
+        if (del && del.checked) { clearRowError(row); return; }
+        if (!nameInput.value.trim()) {
+          setRowError(row);
+          if (!first) first = nameInput;
+        } else {
+          clearRowError(row);
+        }
+      });
+      if (first) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  // Começa com uma linha em branco quando não há nenhuma (tela de criação).
+  if (!rows.querySelector('[data-option-row]')) addBtn.click();
 })();
 </script>
 {% endblock %}

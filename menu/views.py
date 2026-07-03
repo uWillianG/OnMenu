@@ -357,6 +357,22 @@ def item_delete(request, pk):
     return redirect('menu:manage_menu')
 
 
+def _save_complement(form, formset, group):
+    """Salva grupo + opções e renumera o display_order pela ordem visual."""
+    group.save()
+    formset.instance = group
+    formset.save()
+    order = 0
+    for choice_form in formset.forms:
+        choice = choice_form.instance
+        if not choice.pk:  # ignora linhas novas em branco e as excluídas
+            continue
+        order += 10
+        if choice.display_order != order:
+            choice.display_order = order
+            choice.save(update_fields=['display_order'])
+
+
 @staff_member_required
 def complement_create(request):
     """Cria um novo grupo de complementos (reutilizável) e suas opções."""
@@ -371,9 +387,7 @@ def complement_create(request):
         if form.is_valid() and formset.is_valid():
             group = form.save(commit=False)
             group.restaurant = restaurant
-            group.save()
-            formset.instance = group
-            formset.save()
+            _save_complement(form, formset, group)
             messages.success(request, f'Complemento “{group.name}” criado.')
             return redirect('menu:manage_menu')
     else:
@@ -397,8 +411,7 @@ def complement_edit(request, pk):
         form = ComplementGroupForm(request.POST, instance=group)
         formset = ComplementChoiceFormSet(request.POST, instance=group)
         if form.is_valid() and formset.is_valid():
-            form.save()
-            formset.save()
+            _save_complement(form, formset, form.save(commit=False))
             messages.success(request, f'Complemento “{group.name}” atualizado.')
             return redirect('menu:manage_menu')
     else:

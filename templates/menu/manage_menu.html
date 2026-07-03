@@ -6,6 +6,7 @@
 <div class="page-content">
   <div class="staff-page manage-menu">
 
+    {# ── Cabeçalho ── #}
     <div class="split-heading">
       <h1 class="page-h1">
         <svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2"/><path d="M5 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>
@@ -14,35 +15,29 @@
       <a class="btn-primary" href="{% url 'menu:item_create' %}">+ Adicionar item</a>
     </div>
 
-    <p class="manage-sub">{{ item_count }} ite{{ item_count|pluralize:"m,ns" }} em {{ categories|length }} categoria{{ categories|length|pluralize }}.</p>
-
-    {# ── Nova categoria (inline) ── #}
-    <details class="detail-card manage-add-cat">
-      <summary>
-        <span class="manage-add-cat-label">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nova categoria
-        </span>
-        <span class="section-chevron">▼</span>
-      </summary>
-      <form method="post" action="{% url 'menu:category_create' %}" class="manage-cat-form">
-        {% csrf_token %}
-        <div class="form-field">
-          <label class="form-label" for="{{ category_form.name.id_for_label }}">{{ category_form.name.label }}</label>
-          {{ category_form.name }}
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="{{ category_form.display_order.id_for_label }}">{{ category_form.display_order.label }}</label>
-          {{ category_form.display_order }}
-        </div>
-        <button type="submit" class="btn-primary">Criar categoria</button>
-      </form>
-    </details>
+    <div class="hero-chips manage-chips">
+      <span class="hero-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        <strong>{{ item_count }}</strong> ite{{ item_count|pluralize:"m,ns" }}
+      </span>
+      <span class="hero-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0l-7.18-7.18a2 2 0 0 1-.59-1.41V4a2 2 0 0 1 2-2h7.83a2 2 0 0 1 1.41.59l7.18 7.18a2 2 0 0 1 0 2.83z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <strong>{{ categories|length }}</strong> categoria{{ categories|length|pluralize }}
+      </span>
+      <span class="hero-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+        <strong>{{ complement_groups|length }}</strong> complemento{{ complement_groups|length|pluralize }}
+      </span>
+    </div>
 
     {# ── Complementos (catálogo reutilizável entre itens) ── #}
+    <p class="manage-section-label">Complementos</p>
     <details class="detail-card manage-cat manage-complements">
       <summary class="manage-cat-head">
         <span class="manage-cat-title">
+          <span class="manage-cat-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+          </span>
           <h2>Complementos</h2>
           <span class="manage-cat-count">{{ complement_groups|length }} grupo{{ complement_groups|length|pluralize }}</span>
         </span>
@@ -89,10 +84,38 @@
     </details>
 
     {# ── Categorias e itens (recolhidas; clique para listar) ── #}
+    <p class="manage-section-label">Categorias</p>
+
+    {# Nova categoria (inline) #}
+    <details class="detail-card manage-add-cat">
+      <summary>
+        <span class="manage-add-cat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova categoria
+        </span>
+        <span class="section-chevron">▼</span>
+      </summary>
+      <form method="post" action="{% url 'menu:category_create' %}" class="manage-cat-form">
+        {% csrf_token %}
+        <div class="form-field">
+          <label class="form-label" for="{{ category_form.name.id_for_label }}">{{ category_form.name.label }}</label>
+          {{ category_form.name }}
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="{{ category_form.display_order.id_for_label }}">{{ category_form.display_order.label }}</label>
+          {{ category_form.display_order }}
+        </div>
+        <button type="submit" class="btn-primary">Criar categoria</button>
+      </form>
+    </details>
+
     {% for category in categories %}
       <details class="detail-card manage-cat">
         <summary class="manage-cat-head">
           <span class="manage-cat-title">
+            <span class="manage-cat-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.6a2 2 0 0 1-2.83 0l-7.18-7.18a2 2 0 0 1-.59-1.41V4a2 2 0 0 1 2-2h7.83a2 2 0 0 1 1.41.59l7.18 7.18a2 2 0 0 1 0 2.83z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </span>
             <h2>{{ category.name }}</h2>
             <span class="manage-cat-count">{{ category.items.all|length }} ite{{ category.items.all|length|pluralize:"m,ns" }}</span>
             {% if not category.is_active %}<span class="manage-tag muted">Inativa</span>{% endif %}
