@@ -33,9 +33,10 @@ def menu_list(request):
         categories = restaurant.categories.filter(is_active=True).prefetch_related(
             Prefetch(
                 'items',
-                queryset=MenuItem.objects.order_by('display_order', 'name').prefetch_related(
-                    'complement_groups__choices'
-                ),
+                queryset=MenuItem.objects
+                .filter(is_available=True)
+                .order_by('display_order', 'name')
+                .prefetch_related('complement_groups__choices'),
             ),
         )
         featured_items = (

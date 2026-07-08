@@ -1,6 +1,16 @@
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+
+from accounts.views import GOOGLE_NEXT_SESSION_KEY, GOOGLE_STATE_SESSION_KEY
+
+GOOGLE_ENABLED = override_settings(
+    GOOGLE_OAUTH_CLIENT_ID='client-id',
+    GOOGLE_OAUTH_CLIENT_SECRET='client-secret',
+    GOOGLE_OAUTH_ENABLED=True,
+)
 
 
 class AuthFlowTests(TestCase):
@@ -321,6 +331,117 @@ class AuthFlowTests(TestCase):
         self.client.login(username='cliente4', password='Sup3rSecret!9')
         html = self.client.get(reverse('cart:cart_detail')).content.decode()
         self.assertNotIn('data-auth-open', html)
+
+
+class GoogleOAuthTests(TestCase):
+    """Login social com Google (fluxo OAuth2 redirect)."""
+
+    def _prime_state(self, state='the-state', next_url=''):
+        """Simula o estado deixado por google_login na sessão."""
+        session = self.client.session
+        session[GOOGLE_STATE_SESSION_KEY] = state
+        session[GOOGLE_NEXT_SESSION_KEY] = next_url
+        session.save()
+
+    def test_button_hidden_when_disabled(self):
+        for name in ('accounts:login', 'accounts:signup'):
+            html = self.client.get(reverse(name)).content.decode()
+            self.assertNotIn('Continuar com Google', html)
+
+    @GOOGLE_ENABLED
+    def test_button_shown_when_enabled(self):
+        for name in ('accounts:login', 'accounts:signup'):
+            html = self.client.get(reverse(name)).content.decode()
+            self.assertIn('Continuar com Google', html)
+            self.assertIn(reverse('accounts:google_login'), html)
+
+    def test_google_login_disabled_redirects_to_login(self):
+        response = self.client.get(reverse('accounts:google_login'))
+        self.assertRedirects(response, reverse('accounts:login'))
+
+    @GOOGLE_ENABLED
+    def test_google_login_sets_state_and_redirects_to_google(self):
+        response = self.client.get(reverse('accounts:google_login') + '?next=/cart/')
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.url.startswith('https://accounts.google.com/'))
+        self.assertIn(GOOGLE_STATE_SESSION_KEY, self.client.session)
+        self.assertEqual(self.client.session[GOOGLE_NEXT_SESSION_KEY], '/cart/')
+
+    @GOOGLE_ENABLED
+    @patch('accounts.services.google.fetch_userinfo')
+    @patch('accounts.services.google.exchange_code')
+    def test_callback_creates_new_user_without_cpf(self, mock_exchange, mock_userinfo):
+        mock_exchange.return_value = {'access_token': 'tok'}
+        mock_userinfo.return_value = {
+            'email': 'novo@gmail.com',
+            'email_verified': True,
+            'given_name': 'Novo',
+            'family_name': 'Cliente',
+        }
+        self._prime_state()
+        response = self.client.get(
+            reverse('accounts:google_callback') + '?state=the-state&code=abc'
+        )
+        self.assertRedirects(
+            response, reverse('menu:menu_list'), fetch_redirect_response=False
+        )
+        user = User.objects.get(email='novo@gmail.com')
+        self.assertEqual(user.first_name, 'Novo')
+        self.assertEqual(user.username, '@novocliente')
+        # Conta via Google nasce sem CPF/telefone e sem senha utilizável.
+        self.assertEqual(user.profile.cpf, '')
+        self.assertEqual(user.profile.phone, '')
+        self.assertFalse(user.has_usable_password())
+        self.assertIn('_auth_user_id', self.client.session)
+
+    @GOOGLE_ENABLED
+    @patch('accounts.services.google.fetch_userinfo')
+    @patch('accounts.services.google.exchange_code')
+    def test_callback_matches_existing_user_by_email(self, mock_exchange, mock_userinfo):
+        existing = User.objects.create_user(
+            username='@existente', email='ja@gmail.com', password='Sup3rSecret!9'
+        )
+        mock_exchange.return_value = {'access_token': 'tok'}
+        mock_userinfo.return_value = {
+            'email': 'JA@gmail.com',  # e-mail casa sem diferenciar maiúsculas
+            'email_verified': True,
+            'given_name': 'Ja',
+        }
+        self._prime_state(next_url=reverse('orders:checkout'))
+        response = self.client.get(
+            reverse('accounts:google_callback') + '?state=the-state&code=abc'
+        )
+        self.assertRedirects(
+            response, reverse('orders:checkout'), fetch_redirect_response=False
+        )
+        self.assertEqual(User.objects.filter(email__iexact='ja@gmail.com').count(), 1)
+        self.assertEqual(int(self.client.session['_auth_user_id']), existing.pk)
+
+    @GOOGLE_ENABLED
+    def test_callback_rejects_mismatched_state(self):
+        self._prime_state(state='esperado')
+        response = self.client.get(
+            reverse('accounts:google_callback') + '?state=forjado&code=abc'
+        )
+        self.assertRedirects(response, reverse('accounts:login'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    @GOOGLE_ENABLED
+    @patch('accounts.services.google.fetch_userinfo')
+    @patch('accounts.services.google.exchange_code')
+    def test_callback_rejects_unverified_email(self, mock_exchange, mock_userinfo):
+        mock_exchange.return_value = {'access_token': 'tok'}
+        mock_userinfo.return_value = {
+            'email': 'naoverificado@gmail.com',
+            'email_verified': False,
+            'given_name': 'Nao',
+        }
+        self._prime_state()
+        response = self.client.get(
+            reverse('accounts:google_callback') + '?state=the-state&code=abc'
+        )
+        self.assertRedirects(response, reverse('accounts:login'))
+        self.assertFalse(User.objects.filter(email='naoverificado@gmail.com').exists())
 
 
 class PhoneAndProfileTests(TestCase):

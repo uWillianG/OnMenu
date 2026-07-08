@@ -1,6 +1,10 @@
+import secrets
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.http import JsonResponse
 from django.shortcuts import redirect, render, resolve_url
@@ -9,8 +13,20 @@ from django.views.decorators.http import require_POST
 
 from orders.models import City, Order
 
-from .forms import AddressForm, LoginForm, ProfileForm, SignupForm
+from .forms import (
+    AddressForm,
+    LoginForm,
+    ProfileForm,
+    SignupForm,
+    _generate_username,
+    _split_full_name,
+)
 from .models import Profile
+from .services import google as google_oauth
+
+# Chaves da sessão usadas no fluxo OAuth2 do Google.
+GOOGLE_STATE_SESSION_KEY = 'google_oauth_state'
+GOOGLE_NEXT_SESSION_KEY = 'google_oauth_next'
 
 
 class CustomLoginView(LoginView):
@@ -22,6 +38,11 @@ class CustomLoginView(LoginView):
     def get_default_redirect_url(self):
         """Sem ?next=: todos vão para a tela principal (cardápio)."""
         return resolve_url('menu:menu_list')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['google_oauth_enabled'] = settings.GOOGLE_OAUTH_ENABLED
+        return context
 
 
 def signup(request):
@@ -45,8 +66,100 @@ def signup(request):
     return render(
         request,
         'registration/signup.html',
-        {'form': form, 'next': next_url, 'hide_cart': True},
+        {
+            'form': form,
+            'next': next_url,
+            'hide_cart': True,
+            'google_oauth_enabled': settings.GOOGLE_OAUTH_ENABLED,
+        },
     )
+
+
+def google_login(request):
+    """Inicia o fluxo OAuth2: gera o ``state`` e redireciona ao Google."""
+    if not settings.GOOGLE_OAUTH_ENABLED:
+        messages.error(request, 'Login com Google indisponível no momento.')
+        return redirect('accounts:login')
+
+    if request.user.is_authenticated:
+        return redirect(_safe_next(request, request.GET.get('next', '')))
+
+    state = secrets.token_urlsafe(32)
+    request.session[GOOGLE_STATE_SESSION_KEY] = state
+    request.session[GOOGLE_NEXT_SESSION_KEY] = request.GET.get('next', '')
+    return redirect(google_oauth.build_authorization_url(request, state))
+
+
+def google_callback(request):
+    """Recebe o retorno do Google, valida, e loga (ou cria) o usuário."""
+    if not settings.GOOGLE_OAUTH_ENABLED:
+        return redirect('accounts:login')
+
+    # O usuário pode ter negado a permissão no Google.
+    if request.GET.get('error'):
+        messages.error(request, 'Login com Google cancelado.')
+        return redirect('accounts:login')
+
+    # Confere o state contra CSRF; consome-o da sessão em qualquer caso.
+    expected_state = request.session.pop(GOOGLE_STATE_SESSION_KEY, None)
+    next_url = request.session.pop(GOOGLE_NEXT_SESSION_KEY, '')
+    state = request.GET.get('state')
+    if not state or state != expected_state:
+        messages.error(request, 'Falha na verificação de segurança do login. Tente novamente.')
+        return redirect('accounts:login')
+
+    code = request.GET.get('code')
+    if not code:
+        messages.error(request, 'Não recebemos a autorização do Google.')
+        return redirect('accounts:login')
+
+    try:
+        tokens = google_oauth.exchange_code(request, code)
+        userinfo = google_oauth.fetch_userinfo(tokens['access_token'])
+    except (google_oauth.GoogleOAuthError, KeyError):
+        messages.error(request, 'Não foi possível entrar com o Google. Tente novamente.')
+        return redirect('accounts:login')
+
+    email = (userinfo.get('email') or '').strip()
+    if not email or not userinfo.get('email_verified', False):
+        messages.error(request, 'Sua conta Google não tem um e-mail verificado.')
+        return redirect('accounts:login')
+
+    user, created = _get_or_create_google_user(email, userinfo)
+    login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
+    if created:
+        messages.success(
+            request,
+            'Conta criada com o Google! Você poderá informar CPF e telefone no '
+            'primeiro pedido.',
+        )
+    return redirect(_safe_next(request, next_url))
+
+
+def _get_or_create_google_user(email, userinfo):
+    """Casa por e-mail uma conta existente ou cria uma nova (sem CPF/telefone).
+
+    Contas criadas via Google ficam sem senha utilizável (``set_unusable_password``)
+    e sem CPF/telefone — esses dados são coletados depois, no checkout.
+    """
+    user = User.objects.filter(email__iexact=email).order_by('id').first()
+    if user:
+        return user, False
+
+    first = (userinfo.get('given_name') or '').strip()
+    last = (userinfo.get('family_name') or '').strip()
+    if not first:
+        first, last = _split_full_name(userinfo.get('name') or email.split('@')[0])
+
+    user = User(
+        username=_generate_username(first, last or first),
+        email=email,
+        first_name=first,
+        last_name=last,
+    )
+    user.set_unusable_password()
+    user.save()  # o signal post_save cria o Profile (CPF/telefone em branco).
+    return user, True
 
 
 @login_required

@@ -44,12 +44,11 @@ class MenuViewsTests(TestCase):
             is_available=False,
         )
 
-    def test_menu_shows_available_and_unavailable_items(self):
+    def test_menu_hides_unavailable_items(self):
         response = self.client.get(reverse('menu:menu_list'))
 
         self.assertContains(response, 'Burger')
-        self.assertContains(response, 'Soup')
-        self.assertContains(response, 'Indispon')
+        self.assertNotContains(response, 'Soup')
 
     def test_item_detail_renders_item(self):
         response = self.client.get(

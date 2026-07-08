@@ -191,6 +191,15 @@ PIX_EXPIRATION_MINUTES = 30
 # E-mail do pagador enviado ao Mercado Pago (não coletamos e-mail no checkout).
 PIX_DEFAULT_PAYER_EMAIL = os.environ.get('PIX_DEFAULT_PAYER_EMAIL', 'comprador@onmenu.com.br')
 
+# --- Login social com Google (OAuth2) ---
+# Credenciais do OAuth client (tipo "Web application") criado no Google Cloud
+# Console. O redirect autorizado deve ser BASE_URL + /accounts/entrar/google/callback/.
+# Sem as duas credenciais, o recurso fica desligado e o botão "Continuar com
+# Google" não é exibido — análogo ao modo mock dos outros serviços externos.
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '')
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '')
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+
 # --- WhatsApp (Cloud API) ---
 # Token e phone number id da WhatsApp Cloud API (Meta). Sem token/phone id, o
 # sistema roda em modo "mock": as mensagens são apenas registradas no log, sem

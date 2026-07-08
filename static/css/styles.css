@@ -2885,6 +2885,50 @@ body.has-bulk-bar { padding-bottom: 96px; }
   line-height: 1.55;
 }
 
+/* Botão "Continuar com Google": mesmas proporções do .btn-primary (altura,
+   raio e peso) para formar um par coerente com o CTA vermelho — porém em
+   superfície branca com borda; o "G" colorido é o único acento. */
+.btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color .15s, background .15s, transform .12s;
+}
+.btn-google:hover { border-color: var(--text); background: var(--surface-2); }
+.btn-google:active { transform: scale(.98); }
+.btn-google-ico { flex: 0 0 auto; width: 17px; height: 17px; }
+
+/* Divisor "ou" entre o login social e o formulário de e-mail. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 9px;
+  color: var(--muted);
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .auth-form { display: grid; gap: 14px; }
 
 .auth-form .btn-primary { margin-top: 4px; }

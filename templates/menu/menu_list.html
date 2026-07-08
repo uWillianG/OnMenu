@@ -114,7 +114,7 @@
           <details class="menu-section" id="{{ category.slug }}">
             <summary>
               {{ category.name }}
-              <span class="section-item-count">{{ category.items.count }} ite{% if category.items.count == 1 %}m{% else %}ns{% endif %}</span>
+              <span class="section-item-count">{{ category.items.all|length }} ite{% if category.items.all|length == 1 %}m{% else %}ns{% endif %}</span>
               <span class="section-chevron">▼</span>
             </summary>
             <div class="section-body">

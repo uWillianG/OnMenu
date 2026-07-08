@@ -30,6 +30,8 @@
       <button type="submit" class="btn-primary">Criar conta</button>
     </form>
 
+    {% include 'registration/_google_button.html' %}
+
     <p class="auth-alt">
       Já tem conta?
       <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Entrar</a>

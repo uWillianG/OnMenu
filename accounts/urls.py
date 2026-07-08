@@ -10,6 +10,11 @@ urlpatterns = [
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('signup/', views.signup, name='signup'),
+
+    # Login social com Google (OAuth2)
+    path('entrar/google/', views.google_login, name='google_login'),
+    path('entrar/google/callback/', views.google_callback, name='google_callback'),
+
     path('perfil/', views.profile, name='profile'),
     path('perfil/salvar-endereco/', views.save_address, name='save_address'),
     path('meus-pedidos/', views.order_history, name='order_history'),
