@@ -12,6 +12,13 @@ GOOGLE_ENABLED = override_settings(
     GOOGLE_OAUTH_ENABLED=True,
 )
 
+# Força o modo desligado independentemente do que houver no .env do ambiente.
+GOOGLE_DISABLED = override_settings(
+    GOOGLE_OAUTH_CLIENT_ID='',
+    GOOGLE_OAUTH_CLIENT_SECRET='',
+    GOOGLE_OAUTH_ENABLED=False,
+)
+
 
 class AuthFlowTests(TestCase):
     def test_login_and_signup_pages_render(self):
@@ -343,6 +350,7 @@ class GoogleOAuthTests(TestCase):
         session[GOOGLE_NEXT_SESSION_KEY] = next_url
         session.save()
 
+    @GOOGLE_DISABLED
     def test_button_hidden_when_disabled(self):
         for name in ('accounts:login', 'accounts:signup'):
             html = self.client.get(reverse(name)).content.decode()
@@ -355,6 +363,7 @@ class GoogleOAuthTests(TestCase):
             self.assertIn('Continuar com Google', html)
             self.assertIn(reverse('accounts:google_login'), html)
 
+    @GOOGLE_DISABLED
     def test_google_login_disabled_redirects_to_login(self):
         response = self.client.get(reverse('accounts:google_login'))
         self.assertRedirects(response, reverse('accounts:login'))

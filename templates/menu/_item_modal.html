@@ -1,0 +1,37 @@
+{% comment %}Modal de produto (adicionar ao carrinho). Reutilizado na tela
+principal e no carrinho. Requer os divs #modal-data-<pk> na página
+(ver _modal_data.html) e o script static/js/item-modal.js.{% endcomment %}
+<div id="item-modal" class="modal-overlay" hidden aria-modal="true" role="dialog" data-currency="{{ currency_symbol }}">
+  <div class="modal-card">
+    <button class="modal-close" id="modal-close" type="button" aria-label="Fechar">✕</button>
+    <div class="modal-image-wrap">
+      <img id="modal-img" src="" alt="">
+    </div>
+    <div class="modal-body">
+      <div>
+        <h2 class="modal-name" id="modal-name"></h2>
+        <p class="modal-desc" id="modal-desc"></p>
+      </div>
+      <form id="modal-form" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="quantity" id="modal-qty-input" value="1">
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <div id="modal-groups"></div>
+        <textarea id="modal-notes" class="modal-notes" name="item_notes" placeholder="Digite observações aqui (opcional)..."></textarea>
+        <div class="modal-footer">
+          <div class="modal-qty-row">
+            <button class="qty-btn" id="qty-minus" type="button" aria-label="Diminuir quantidade">−</button>
+            <span class="qty-val" id="qty-val">1</span>
+            <button class="qty-btn" id="qty-plus" type="button" aria-label="Aumentar quantidade">+</button>
+            <span class="qty-label">unidade(s)</span>
+          </div>
+          <div class="modal-total">
+            <span>Total</span>
+            <strong id="modal-total-val"></strong>
+          </div>
+          <button class="btn-primary modal-add-btn" type="submit">Adicionar ao carrinho</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

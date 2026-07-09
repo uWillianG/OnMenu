@@ -1,0 +1,17 @@
+{% load static %}
+{% comment %}Dados ocultos de um item, lidos pelo modal (static/js/item-modal.js).
+Espera a variável `item` (um MenuItem). Inclua um por item na página.{% endcomment %}
+<div id="modal-data-{{ item.pk }}" hidden
+     data-name="{{ item.name }}"
+     data-price="{{ item.price }}"
+     data-desc="{{ item.description }}"
+     data-image="{% if item.image %}{{ item.image.url }}{% elif item.image_url %}{{ item.image_url }}{% else %}{% static 'img/placeholder-food.svg' %}{% endif %}"
+     data-url="{% url 'cart:cart_add' item.pk %}">
+  {% for group in item.complement_groups.all %}
+    <span data-gid="{{ group.pk }}" data-gname="{{ group.name }}" data-req="{{ group.required|yesno:'true,false' }}" data-selection="{{ group.selection_type }}">
+      {% for c in group.choices.all %}
+        <span data-cid="{{ c.pk }}" data-cname="{{ c.name }}" data-extra="{{ c.extra_price }}"></span>
+      {% endfor %}
+    </span>
+  {% endfor %}
+</div>

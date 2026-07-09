@@ -15,7 +15,8 @@
       <div class="cart-lines">
         {% for entry in cart_items %}
           <article class="cart-line{% if not entry.item.is_available %} unavailable{% endif %}">
-            <a class="cart-thumb" href="{% url 'menu:item_detail' entry.item.pk entry.item.slug %}">
+            <div class="cart-thumb{% if entry.item.is_available %} is-clickable{% endif %}"
+                 {% if entry.item.is_available %}data-open-modal="{{ entry.item.pk }}" role="button" tabindex="0" aria-label="Ver {{ entry.item.name }}"{% endif %}>
               {% if entry.item.image %}
                 <img src="{{ entry.item.image.url }}" alt="{{ entry.item.name }}">
               {% elif entry.item.image_url %}
@@ -23,15 +24,30 @@
               {% else %}
                 <img src="{% static 'img/placeholder-food.svg' %}" alt="">
               {% endif %}
-            </a>
+            </div>
 
             <div class="cart-line-body">
               <div class="cart-line-head">
-                <div class="cart-line-name">{{ entry.item.name }}</div>
-                <form method="post" action="{% url 'cart:cart_remove' entry.item.pk %}">
-                  {% csrf_token %}
-                  <button class="cart-line-remove" type="submit" aria-label="Remover {{ entry.item.name }}">✕</button>
-                </form>
+                <div class="cart-line-name{% if entry.item.is_available %} is-clickable{% endif %}"
+                     {% if entry.item.is_available %}data-open-modal="{{ entry.item.pk }}" role="button" tabindex="0"{% endif %}>{{ entry.item.name }}</div>
+                <div class="cart-line-actions">
+                  {% if entry.item.is_available %}
+                    <button type="button" class="cart-line-edit"
+                            data-edit-line
+                            data-item="{{ entry.item.pk }}"
+                            data-action="{% url 'cart:cart_edit' entry.line_id %}"
+                            data-selected="{% for c in entry.options %}{{ c.pk }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                            data-qty="{{ entry.quantity }}"
+                            data-notes="{{ entry.notes }}"
+                            aria-label="Editar {{ entry.item.name }}">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                    </button>
+                  {% endif %}
+                  <form method="post" action="{% url 'cart:cart_remove' entry.line_id %}">
+                    {% csrf_token %}
+                    <button class="cart-line-remove" type="submit" aria-label="Remover {{ entry.item.name }}">✕</button>
+                  </form>
+                </div>
               </div>
 
               {% for choice in entry.options %}
@@ -44,13 +60,13 @@
 
               <div class="cart-line-foot">
                 <div class="qty-stepper" role="group" aria-label="Quantidade">
-                  <form method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
+                  <form method="post" action="{% url 'cart:cart_update' entry.line_id %}">
                     {% csrf_token %}
                     <input type="hidden" name="quantity" value="{{ entry.quantity|add:'-1' }}">
                     <button class="step-btn" type="submit" aria-label="Diminuir">−</button>
                   </form>
                   <span class="qty-num" aria-live="polite">{{ entry.quantity }}</span>
-                  <form method="post" action="{% url 'cart:cart_update' entry.item.pk %}">
+                  <form method="post" action="{% url 'cart:cart_update' entry.line_id %}">
                     {% csrf_token %}
                     <input type="hidden" name="quantity" value="{{ entry.quantity|add:'1' }}">
                     <button class="step-btn" type="submit" aria-label="Aumentar">+</button>
@@ -80,6 +96,12 @@
         </div>
       </aside>
     </div>
+
+    {# ── Dados + modal de produto (mesmo da tela principal) ── #}
+    {% for item in modal_items %}
+      {% include 'menu/_modal_data.html' with item=item %}
+    {% endfor %}
+    {% include 'menu/_item_modal.html' %}
 
     {% if not request.user.is_authenticated %}
       <div id="auth-modal" class="modal-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
@@ -113,6 +135,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/item-modal.js' %}?v=2"></script>
 {% if not request.user.is_authenticated %}
 <script>
 (function () {
