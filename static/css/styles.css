@@ -101,9 +101,13 @@ h1, h2, h3, p { overflow-wrap: anywhere; margin: 0; }
   border-radius: 999px;
   font-weight: 700;
   font-size: .9rem;
+  white-space: nowrap;
+  flex: none;
   box-shadow: var(--shadow-warm);
   transition: transform .15s, box-shadow .15s, filter .15s;
 }
+
+#cart-btn-total { white-space: nowrap; }
 
 .cart-btn:hover { transform: translateY(-1px); filter: brightness(1.04); }
 .cart-btn:active { transform: translateY(0); }
@@ -505,6 +509,7 @@ body.no-scroll { overflow: hidden; }
   line-height: 1;
   box-shadow: 0 0 0 2px var(--surface);
 }
+.bell-badge[hidden] { display: none; }
 
 /* ── Página de notificações ─────────────────────────────────── */
 .notif-page { max-width: 720px; margin: 0 auto; }
@@ -1536,8 +1541,18 @@ a.hero-chip-action:hover { color: var(--primary); border-color: var(--primary); 
 .float-cart-label {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.float-cart-ico { width: 19px; height: 19px; flex: none; }
+
+.float-cart-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .float-cart-total { flex: 0 0 auto; }
@@ -2504,6 +2519,96 @@ body.has-bulk-bar { padding-bottom: 96px; }
   border: 2px solid var(--surface);
 }
 
+/* Menu de impressão (Caixa / Cozinha / Entregador) */
+.print-menu { position: relative; }
+.print-menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  min-width: 184px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  transform-origin: top right;
+  animation: print-menu-in .14s ease;
+}
+.print-menu-list[hidden] { display: none; }
+/* Seta apontando para o botão de impressão. */
+.print-menu-list::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 13px;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  transform: rotate(45deg);
+}
+@keyframes print-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .print-menu-list { animation: none; }
+}
+.print-menu-title {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  padding: 4px 10px 6px;
+}
+.print-menu-item {
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--text);
+  transition: background .12s, color .12s;
+}
+.print-menu-item:hover { background: var(--surface-2); color: var(--primary); }
+/* Botão realçado enquanto o menu está aberto. */
+.print-menu > [aria-haspopup][aria-expanded="true"] { color: var(--primary); border-color: var(--primary); }
+
+/* Opções de impressão no modal de resumo */
+.summary-print {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.summary-print-label {
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+}
+.summary-print-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.print-chip {
+  flex: 1;
+  min-width: 92px;
+  text-align: center;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--text);
+  transition: color .15s, border-color .15s;
+}
+.print-chip:hover { color: var(--primary); border-color: var(--primary); }
+
 /* Modal de filtros */
 .filter-modal-title { font-size: 1.3rem; font-weight: 800; letter-spacing: -.4px; }
 .filter-modal-actions { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
@@ -2581,6 +2686,16 @@ body.has-bulk-bar { padding-bottom: 96px; }
 }
 
 .order-card:hover { box-shadow: var(--shadow-sm); transform: translateY(-2px); }
+
+/* Pedido recém-chegado via atualização em tempo real: destaca por instantes. */
+.order-card.is-new { animation: order-card-in .5s ease; }
+@keyframes order-card-in {
+  0%   { box-shadow: 0 0 0 0 rgba(225,20,40,.45); border-color: var(--primary); }
+  100% { box-shadow: 0 0 0 6px rgba(225,20,40,0); border-color: var(--border); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .order-card.is-new { animation: none; }
+}
 
 .order-card-info h2 { font-size: 1.05rem; font-weight: 800; margin-bottom: 4px; }
 .order-card-info h2 a { color: var(--primary); }

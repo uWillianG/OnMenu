@@ -1,0 +1,10 @@
+{% comment %}Lista de cartões de uma seção do painel. Espera `orders`, `empty_title`, `empty_text`.
+Usado tanto no carregamento da página quanto na atualização em tempo real (feed).{% endcomment %}
+{% for order in orders %}
+  {% include 'orders/_staff_order_card.html' %}
+{% empty %}
+  <div class="empty-state">
+    <h2>{{ empty_title }}</h2>
+    <p>{{ empty_text }}</p>
+  </div>
+{% endfor %}

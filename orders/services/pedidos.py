@@ -15,17 +15,25 @@ _REJECTED = {'rejected'}
 _CANCELLED = {'cancelled', 'expired', 'refunded', 'charged_back'}
 
 
-def _set_order_status(order: Order, new_status) -> None:
+def _set_order_status(order: Order, new_status) -> bool:
+    """Aplica o novo status de pagamento. Retorna ``True`` se houve mudança."""
     # Nunca reverter um pedido já pago.
     if order.payment_status == Order.PaymentStatus.PAID and new_status != Order.PaymentStatus.PAID:
-        return
+        return False
     if order.payment_status != new_status:
         order.payment_status = new_status
         order.save(update_fields=['payment_status', 'updated_at'])
+        return True
+    return False
 
 
 def marcar_pago(order: Order) -> None:
-    _set_order_status(order, Order.PaymentStatus.PAID)
+    changed = _set_order_status(order, Order.PaymentStatus.PAID)
+    # Só avisa os admins na transição real para "pago" (idempotente): pedidos
+    # online (Pix/cartão) entram na fila da cozinha quando o pagamento confirma.
+    if changed:
+        from . import notificacoes  # import tardio evita ciclo de importação
+        notificacoes.notificar_admins_novo_pedido(order)
 
 
 def marcar_em_analise(order: Order) -> None:

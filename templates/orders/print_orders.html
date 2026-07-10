@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ scope_label }} | Impressão | OnMenu</title>
+  <title>{{ scope_label }}{% if variant_label %} · {{ variant_label }}{% endif %} | Impressão | OnMenu</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -64,6 +64,46 @@
     .totals .line { margin: 2px 0; }
     .totals .grand { font-weight: 800; font-size: 15px; border-top: 1px solid #111827; padding-top: 6px; margin-top: 6px; }
     .foot { text-align: center; color: #6b7280; font-size: 11px; margin-top: 10px; }
+
+    /* Faixa que identifica o tipo de comanda (cozinha/entregador). */
+    .banner {
+      text-align: center;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 5px;
+      margin: 0 0 10px;
+    }
+    .banner.cozinha   { background: #111827; color: #fff; }
+    .banner.entregador { background: #fff; color: #111827; border: 2px solid #111827; }
+
+    /* Comanda da cozinha: itens grandes e legíveis, sem preços. */
+    .receipt.cozinha .kline { margin: 8px 0; }
+    .receipt.cozinha .kline .name { font-size: 16px; font-weight: 800; }
+    .receipt.cozinha .opt { font-size: 13px; }
+    .receipt.cozinha .note { font-size: 13px; }
+    .receipt.cozinha .order-no { font-size: 18px; }
+
+    /* Comanda do entregador: endereço em destaque. */
+    .receipt.entregador .addr {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin: 6px 0;
+    }
+    .pay-badge {
+      text-align: center;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 8px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+    .pay-badge.due  { background: #fef2f2; color: #b91c1c; border: 2px solid #b91c1c; }
+    .pay-badge.paid { background: #ecfdf5; color: #047857; border: 2px solid #047857; }
+
     @media print {
       body { background: #fff; }
       .print-toolbar { display: none; }
@@ -84,50 +124,114 @@
   <div class="print-toolbar">
     <button type="button" class="primary" onclick="window.print()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-      Imprimir
+      Imprimir{% if variant_label and variant != 'completa' %} · {{ variant_label }}{% endif %}
     </button>
     <button type="button" onclick="window.close()">Fechar</button>
   </div>
 
   <div class="sheet">
     {% for order in orders %}
-      <article class="receipt">
-        <h1>{{ order.restaurant.name }}</h1>
-        <div class="sub">Comanda · {{ order.status_display }}</div>
-        <div class="order-no">{{ order.order_number }}</div>
-        <div class="sub">{{ order.created_at|date:"d/m/Y H:i" }}</div>
+      <article class="receipt {{ variant }}">
 
-        <hr class="hr">
+        {% if variant == 'cozinha' %}
+          {# ---------- Comanda da COZINHA: só o que precisa ser preparado ---------- #}
+          <div class="banner cozinha">Cozinha</div>
+          <div class="order-no">{{ order.order_number }}</div>
+          <div class="sub">{{ order.created_at|date:"d/m/Y H:i" }} · {{ order.get_fulfillment_method_display }}</div>
+          <p class="meta" style="text-align:center"><strong style="min-width:0">Cliente:</strong> {{ order.customer_name }}</p>
 
-        <p class="meta"><strong>Cliente:</strong> {{ order.customer_name }}</p>
-        <p class="meta"><strong>Telefone:</strong> {{ order.phone }}</p>
-        <p class="meta"><strong>Entrega:</strong> {{ order.get_fulfillment_method_display }}</p>
-        <p class="meta"><strong>Pagamento:</strong> {{ order.get_payment_method_display }} ({{ order.get_payment_status_display }})</p>
-        {% if order.address %}<p class="meta"><strong>Endereço:</strong> {{ order.address|linebreaksbr }}</p>{% endif %}
-        {% if order.notes %}<p class="meta"><strong>Obs.:</strong> {{ order.notes }}</p>{% endif %}
+          <hr class="hr">
 
-        <hr class="hr">
-
-        {% for item in order.items.all %}
-          <div class="line">
-            <span class="name">{{ item.quantity }}× {{ item.item_name }}</span>
-            <span>R$ {{ item.line_total|floatformat:2 }}</span>
-          </div>
-          {% for opt in item.options.all %}
-            <div class="opt">{{ opt.group_name }}: {{ opt.choice_name }}{% if opt.extra_price %} (+R$ {{ opt.extra_price|floatformat:2 }}){% endif %}</div>
+          {% for item in order.items.all %}
+            <div class="line kline">
+              <span class="name">{{ item.quantity }}× {{ item.item_name }}</span>
+            </div>
+            {% for opt in item.options.all %}
+              <div class="opt">{{ opt.group_name }}: {{ opt.choice_name }}</div>
+            {% endfor %}
+            {% if item.notes %}<div class="note">↳ {{ item.notes }}</div>{% endif %}
           {% endfor %}
-          {% if item.notes %}<div class="note">↳ {{ item.notes }}</div>{% endif %}
-        {% endfor %}
 
-        <hr class="hr">
+          {% if order.notes %}
+            <hr class="hr">
+            <p class="meta"><strong style="min-width:0">Obs.:</strong> {{ order.notes }}</p>
+          {% endif %}
 
-        <div class="totals">
-          <div class="line"><span>Subtotal</span><span>R$ {{ order.subtotal|floatformat:2 }}</span></div>
-          <div class="line"><span>Taxa de entrega</span><span>R$ {{ order.delivery_fee|floatformat:2 }}</span></div>
-          <div class="line grand"><span>Total</span><span>R$ {{ order.total|floatformat:2 }}</span></div>
-        </div>
+          <div class="foot">OnMenu · Cozinha · {{ order.order_number }}</div>
 
-        <div class="foot">OnMenu · {{ order.order_number }}</div>
+        {% elif variant == 'entregador' %}
+          {# ---------- Comanda do ENTREGADOR: entrega e cobrança ---------- #}
+          <div class="banner entregador">Entregador</div>
+          <div class="order-no">{{ order.order_number }}</div>
+          <div class="sub">{{ order.created_at|date:"d/m/Y H:i" }} · {{ order.get_fulfillment_method_display }}</div>
+
+          <hr class="hr">
+
+          <p class="meta"><strong>Cliente:</strong> {{ order.customer_name }}</p>
+          <p class="meta"><strong>Telefone:</strong> {{ order.phone }}</p>
+          {% if order.address %}
+            <p class="meta" style="margin-top:6px"><strong style="min-width:0">Endereço:</strong></p>
+            <div class="addr">{{ order.address|linebreaksbr }}</div>
+          {% endif %}
+          {% if order.notes %}<p class="meta"><strong>Obs.:</strong> {{ order.notes }}</p>{% endif %}
+
+          <hr class="hr">
+
+          {% for item in order.items.all %}
+            <div class="line"><span class="name">{{ item.quantity }}× {{ item.item_name }}</span></div>
+          {% endfor %}
+
+          <hr class="hr">
+
+          <p class="meta"><strong>Pagamento:</strong> {{ order.get_payment_method_display }}</p>
+          {% if order.is_paid %}
+            <div class="pay-badge paid">PAGO · não cobrar</div>
+          {% else %}
+            <div class="pay-badge due">A COBRAR: R$ {{ order.total|floatformat:2 }}</div>
+          {% endif %}
+
+          <div class="foot">OnMenu · Entregador · {{ order.order_number }}</div>
+
+        {% else %}
+          {# ---------- Comanda COMPLETA (caixa): visão completa ---------- #}
+          <h1>{{ order.restaurant.name }}</h1>
+          <div class="sub">Comanda · {{ order.status_display }}</div>
+          <div class="order-no">{{ order.order_number }}</div>
+          <div class="sub">{{ order.created_at|date:"d/m/Y H:i" }}</div>
+
+          <hr class="hr">
+
+          <p class="meta"><strong>Cliente:</strong> {{ order.customer_name }}</p>
+          <p class="meta"><strong>Telefone:</strong> {{ order.phone }}</p>
+          <p class="meta"><strong>Entrega:</strong> {{ order.get_fulfillment_method_display }}</p>
+          <p class="meta"><strong>Pagamento:</strong> {{ order.get_payment_method_display }} ({{ order.get_payment_status_display }})</p>
+          {% if order.address %}<p class="meta"><strong>Endereço:</strong> {{ order.address|linebreaksbr }}</p>{% endif %}
+          {% if order.notes %}<p class="meta"><strong>Obs.:</strong> {{ order.notes }}</p>{% endif %}
+
+          <hr class="hr">
+
+          {% for item in order.items.all %}
+            <div class="line">
+              <span class="name">{{ item.quantity }}× {{ item.item_name }}</span>
+              <span>R$ {{ item.line_total|floatformat:2 }}</span>
+            </div>
+            {% for opt in item.options.all %}
+              <div class="opt">{{ opt.group_name }}: {{ opt.choice_name }}{% if opt.extra_price %} (+R$ {{ opt.extra_price|floatformat:2 }}){% endif %}</div>
+            {% endfor %}
+            {% if item.notes %}<div class="note">↳ {{ item.notes }}</div>{% endif %}
+          {% endfor %}
+
+          <hr class="hr">
+
+          <div class="totals">
+            <div class="line"><span>Subtotal</span><span>R$ {{ order.subtotal|floatformat:2 }}</span></div>
+            <div class="line"><span>Taxa de entrega</span><span>R$ {{ order.delivery_fee|floatformat:2 }}</span></div>
+            <div class="line grand"><span>Total</span><span>R$ {{ order.total|floatformat:2 }}</span></div>
+          </div>
+
+          <div class="foot">OnMenu · {{ order.order_number }}</div>
+        {% endif %}
+
       </article>
     {% empty %}
       <article class="receipt">

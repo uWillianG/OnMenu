@@ -18,7 +18,8 @@
         {% for n in notifications %}
           <li class="notif-item{% if not n.is_read %} is-unread{% endif %}">
             {% if n.order %}
-              <a class="notif-link" href="{% url 'orders:track_order' n.order.order_number %}">
+              {% if request.user.is_staff %}{% url 'orders:staff_order_detail' n.order.order_number as notif_url %}{% else %}{% url 'orders:track_order' n.order.order_number as notif_url %}{% endif %}
+              <a class="notif-link" href="{{ notif_url }}">
                 <span class="notif-message">{{ n.message }}</span>
                 <span class="notif-time">{{ n.created_at|date:"d/m/Y H:i" }}</span>
               </a>

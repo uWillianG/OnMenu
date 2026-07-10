@@ -13,6 +13,7 @@ urlpatterns = [
     ),
     path('orders/track/<str:order_number>/', views.track_order, name='track_order'),
     path('orders/notifications/', views.notifications_list, name='notifications'),
+    path('orders/notifications/feed/', views.notifications_feed, name='notifications_feed'),
     path('orders/<str:order_number>/repeat/', views.repeat_order, name='repeat_order'),
     path('orders/pix/<str:pix_id>/status/', views.pix_status, name='pix_status'),
     path('orders/pix/<str:order_number>/recreate/', views.pix_recreate, name='pix_recreate'),
@@ -22,6 +23,7 @@ urlpatterns = [
     path('webhook/pix/', views.webhook_pix, name='webhook_pix'),
     path('webhook/cartao/', views.webhook_card, name='webhook_card'),
     path('staff/orders/', views.staff_order_list, name='staff_order_list'),
+    path('staff/orders/feed/', views.staff_orders_feed, name='staff_orders_feed'),
     path(
         'staff/orders/bulk-update/',
         views.staff_orders_bulk_update,

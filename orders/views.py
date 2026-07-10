@@ -12,6 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -78,6 +79,13 @@ def checkout(request):
             # Guarda o pedido na sessão para o acompanhamento na tela principal.
             selectors.remember_order(request, order)
             cart.clear()
+            # Avisa os admins assim que o pedido é realizado. Pagamentos online
+            # (Pix/cartão) só avisam quando confirmados — ver pedidos.marcar_pago.
+            if order.payment_method not in (
+                Order.PaymentMethod.PIX,
+                Order.PaymentMethod.CREDIT_CARD,
+            ):
+                notificacoes_service.notificar_admins_novo_pedido(order)
             # Pagamento Pix via modal: cria a cobrança e devolve o QR Code (JSON).
             if order.payment_method == Order.PaymentMethod.PIX and is_ajax:
                 try:
@@ -522,8 +530,33 @@ def notifications_list(request):
     return render(request, 'orders/notifications.html', {'notifications': notifications})
 
 
-@staff_member_required
-def staff_order_list(request):
+@login_required
+def notifications_feed(request):
+    """Estado das notificações do usuário para o sininho ao vivo (polling).
+
+    Devolve o total de não lidas e o maior id de notificação, usado pelo
+    frontend para tocar o alerta sonoro quando uma nova notificação chega.
+    """
+    qs = Notification.objects.filter(user=request.user)
+    latest_id = qs.order_by('-id').values_list('id', flat=True).first() or 0
+    unread = qs.filter(is_read=False).count()
+    return JsonResponse({'ok': True, 'count': unread, 'latest_id': latest_id})
+
+
+def _staff_orders_signature(active_orders, inactive_orders):
+    """Assinatura leve do estado atual do painel.
+
+    Muda quando um pedido novo chega, quando um status muda ou quando um pedido
+    passa de ativo para finalizado — é o que o polling usa para decidir se a
+    lista precisa ser atualizada em tela.
+    """
+    parts = [f'{o.order_number}:{o.status}' for o in active_orders + inactive_orders]
+    parts.sort()
+    return hashlib.md5('|'.join(parts).encode()).hexdigest()
+
+
+def _staff_orders_context(request):
+    """Monta o contexto do painel de pedidos aplicando os filtros da query."""
     orders = Order.objects.select_related('restaurant').prefetch_related('items')
 
     status_filter = request.GET.get('status', '')
@@ -558,31 +591,84 @@ def staff_order_list(request):
     active_orders = [o for o in order_list if o.is_active]
     inactive_orders = [o for o in order_list if not o.is_active]
 
-    return render(
-        request,
-        'orders/staff_order_list.html',
+    return {
+        'active_orders': active_orders,
+        'inactive_orders': inactive_orders,
+        'active_count': len(active_orders),
+        'inactive_count': len(inactive_orders),
+        'status_filter': status_filter,
+        'payment_filter': payment_filter,
+        'fulfillment_filter': fulfillment_filter,
+        'date_filter': date_filter,
+        'has_filters': any([
+            status_filter, payment_filter, fulfillment_filter, date_filter,
+        ]),
+        'status_choices': Order.Status.choices,
+        'bulk_status_choices': Order.bulk_status_choices(),
+        'payment_choices': Order.PaymentMethod.choices,
+        'fulfillment_choices': Order.FulfillmentMethod.choices,
+        'orders_signature': _staff_orders_signature(active_orders, inactive_orders),
+    }
+
+
+@staff_member_required
+def staff_order_list(request):
+    return render(request, 'orders/staff_order_list.html', _staff_orders_context(request))
+
+
+@staff_member_required
+def staff_orders_feed(request):
+    """Atualização em tempo real do painel (polling).
+
+    Devolve os cartões de pedidos já renderizados e uma assinatura do estado.
+    O frontend só troca o HTML em tela quando a assinatura muda, mantendo a
+    seleção e a navegação atuais.
+    """
+    ctx = _staff_orders_context(request)
+    active_html = render_to_string(
+        'orders/_staff_order_cards.html',
         {
-            'active_orders': active_orders,
-            'inactive_orders': inactive_orders,
-            'active_count': len(active_orders),
-            'inactive_count': len(inactive_orders),
-            'status_filter': status_filter,
-            'payment_filter': payment_filter,
-            'fulfillment_filter': fulfillment_filter,
-            'date_filter': date_filter,
-            'has_filters': any([
-                status_filter, payment_filter, fulfillment_filter, date_filter,
-            ]),
-            'status_choices': Order.Status.choices,
-            'bulk_status_choices': Order.bulk_status_choices(),
-            'payment_choices': Order.PaymentMethod.choices,
-            'fulfillment_choices': Order.FulfillmentMethod.choices,
+            'orders': ctx['active_orders'],
+            'empty_title': 'Nenhum pedido ativo',
+            'empty_text': 'Os novos pedidos aparecem aqui assim que chegam.',
         },
+        request=request,
     )
+    inactive_html = render_to_string(
+        'orders/_staff_order_cards.html',
+        {
+            'orders': ctx['inactive_orders'],
+            'empty_title': 'Nenhum pedido finalizado',
+            'empty_text': 'Pedidos entregues ou cancelados aparecem aqui.',
+        },
+        request=request,
+    )
+    return JsonResponse({
+        'ok': True,
+        'signature': ctx['orders_signature'],
+        'active_count': ctx['active_count'],
+        'inactive_count': ctx['inactive_count'],
+        'active_html': active_html,
+        'inactive_html': inactive_html,
+    })
 
 
 def _orders_for_print(queryset):
     return queryset.select_related('restaurant').prefetch_related('items__options')
+
+
+# Tipos de impressão: completa (caixa), cozinha e entregador.
+PRINT_VARIANTS = {
+    'completa': 'Caixa',
+    'cozinha': 'Cozinha',
+    'entregador': 'Entregador',
+}
+
+
+def _print_variant(request):
+    """Lê o tipo de impressão da query (?tipo=), com fallback para 'completa'."""
+    tipo = request.GET.get('tipo', 'completa')
+    return tipo if tipo in PRINT_VARIANTS else 'completa'
 
 
 @staff_member_required
@@ -592,10 +678,17 @@ def staff_order_print(request, order_number):
         _orders_for_print(Order.objects.all()),
         order_number=order_number,
     )
+    variant = _print_variant(request)
     return render(
         request,
         'orders/print_orders.html',
-        {'orders': [order], 'auto_print': True, 'scope_label': 'Pedido'},
+        {
+            'orders': [order],
+            'auto_print': True,
+            'scope_label': 'Pedido',
+            'variant': variant,
+            'variant_label': PRINT_VARIANTS[variant],
+        },
     )
 
 
@@ -605,6 +698,7 @@ def staff_orders_print_active(request):
     orders = _orders_for_print(
         Order.objects.filter(status__in=Order.ACTIVE_STATUSES)
     )
+    variant = _print_variant(request)
     return render(
         request,
         'orders/print_orders.html',
@@ -612,6 +706,8 @@ def staff_orders_print_active(request):
             'orders': list(orders),
             'auto_print': True,
             'scope_label': 'Pedidos ativos',
+            'variant': variant,
+            'variant_label': PRINT_VARIANTS[variant],
         },
     )
 

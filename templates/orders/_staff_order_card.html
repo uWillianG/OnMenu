@@ -18,9 +18,17 @@
             title="Ver resumo" aria-label="Ver resumo do pedido {{ order.order_number }}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
-    <a class="card-icon-btn card-print-btn" href="{% url 'orders:staff_order_print' order.order_number %}"
-       target="_blank" rel="noopener" title="Imprimir pedido" aria-label="Imprimir pedido {{ order.order_number }}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    </a>
+    <div class="print-menu">
+      <button type="button" class="card-icon-btn card-print-btn" aria-haspopup="true" aria-expanded="false"
+              title="Imprimir pedido" aria-label="Imprimir pedido {{ order.order_number }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      </button>
+      <div class="print-menu-list" role="menu" hidden>
+        <span class="print-menu-title">Imprimir</span>
+        <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=completa" target="_blank" rel="noopener">Caixa</a>
+        <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=cozinha" target="_blank" rel="noopener">Cozinha</a>
+        <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=entregador" target="_blank" rel="noopener">Entregador</a>
+      </div>
+    </div>
   </div>
 </article>

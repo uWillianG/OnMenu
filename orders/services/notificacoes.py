@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
+
 from ..models import Notification
 from . import whatsapp as whatsapp_service
 
@@ -20,6 +23,33 @@ logger = logging.getLogger(__name__)
 
 def mensagem_status(order) -> str:
     return f'Seu pedido {order.order_number} agora está: {order.status_display}.'
+
+
+def notificar_admins_novo_pedido(order) -> None:
+    """Avisa todos os administradores (staff) que um novo pedido foi realizado.
+
+    Cria uma ``Notification`` no sistema para cada usuário staff ativo — o
+    sininho do cabeçalho passa a acender (e tocar) para a equipe. Best-effort:
+    uma falha aqui nunca pode interromper o checkout nem a confirmação do
+    pagamento.
+    """
+    try:
+        User = get_user_model()
+        staff = list(User.objects.filter(is_staff=True, is_active=True))
+        if not staff:
+            return
+        msg = (
+            f'Novo pedido {order.order_number} — {order.customer_name} · '
+            f'{settings.CURRENCY_SYMBOL} {order.total}'
+        )
+        Notification.objects.bulk_create(
+            [Notification(user=u, order=order, message=msg) for u in staff]
+        )
+    except Exception:  # noqa: BLE001 - não pode quebrar o pedido/pagamento
+        logger.exception(
+            'Falha ao notificar admins do novo pedido %s',
+            getattr(order, 'order_number', '?'),
+        )
 
 
 def notificar_status_pedido(order) -> None:

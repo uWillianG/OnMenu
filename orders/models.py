@@ -202,6 +202,11 @@ class Order(models.Model):
         """Pedido ainda em andamento (não entregue nem cancelado)."""
         return self.status in self.ACTIVE_STATUSES
 
+    @property
+    def is_paid(self):
+        """Pagamento já confirmado (não há valor a cobrar na entrega)."""
+        return self.payment_status == self.PaymentStatus.PAID
+
     def label_for_status(self, status):
         """Rótulo do status conforme o método de entrega.
 

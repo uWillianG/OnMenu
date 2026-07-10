@@ -39,7 +39,15 @@
 
   <div class="summary-actions">
     <a class="btn-secondary" href="{% url 'orders:staff_order_detail' order.order_number %}">Abrir pedido</a>
-    <a class="btn-primary" href="{% url 'orders:staff_order_print' order.order_number %}" target="_blank" rel="noopener">Imprimir</a>
+  </div>
+
+  <div class="summary-print">
+    <span class="summary-print-label">Imprimir comanda</span>
+    <div class="summary-print-opts">
+      <a class="print-chip" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=completa" target="_blank" rel="noopener">Caixa</a>
+      <a class="print-chip" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=cozinha" target="_blank" rel="noopener">Cozinha</a>
+      <a class="print-chip" href="{% url 'orders:staff_order_print' order.order_number %}?tipo=entregador" target="_blank" rel="noopener">Entregador</a>
+    </div>
   </div>
 
 </div>

@@ -4,7 +4,9 @@
 
 {% block content %}
 <div class="page-content">
-  <div class="staff-page">
+  <div class="staff-page" id="staff-page"
+       data-feed-url="{% url 'orders:staff_orders_feed' %}"
+       data-signature="{{ orders_signature }}">
 
     <div class="split-heading">
       <h1 class="page-h1"><svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>Pedidos</h1>
@@ -21,10 +23,19 @@
                 id="filter-open" title="Filtrar pedidos" aria-label="Filtrar pedidos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
         </button>
-        <a class="card-icon-btn" href="{% url 'orders:staff_orders_print_active' %}"
-           target="_blank" rel="noopener" title="Imprimir ativos" aria-label="Imprimir pedidos ativos">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        </a>
+        <div class="print-menu" id="print-menu">
+          <button type="button" class="card-icon-btn" id="print-menu-btn"
+                  title="Imprimir ativos" aria-label="Imprimir pedidos ativos"
+                  aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <div class="print-menu-list" id="print-menu-list" role="menu" hidden>
+            <span class="print-menu-title">Imprimir ativos</span>
+            <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_orders_print_active' %}?tipo=completa" target="_blank" rel="noopener">Caixa</a>
+            <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_orders_print_active' %}?tipo=cozinha" target="_blank" rel="noopener">Cozinha</a>
+            <a class="print-menu-item" role="menuitem" href="{% url 'orders:staff_orders_print_active' %}?tipo=entregador" target="_blank" rel="noopener">Entregador</a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -34,43 +45,29 @@
 
       <section class="order-section" id="section-active">
         <div class="order-section-head">
-          <h2 class="order-section-title">Ativos <span class="order-section-count">{{ active_count }}</span></h2>
+          <h2 class="order-section-title">Ativos <span class="order-section-count" id="count-active">{{ active_count }}</span></h2>
           {% if active_orders %}
             <label class="select-all-label">
               <input type="checkbox" class="select-all"> Selecionar todos
             </label>
           {% endif %}
         </div>
-        <div class="order-cards">
-          {% for order in active_orders %}
-            {% include 'orders/_staff_order_card.html' %}
-          {% empty %}
-            <div class="empty-state">
-              <h2>Nenhum pedido ativo</h2>
-              <p>Os novos pedidos aparecem aqui assim que chegam.</p>
-            </div>
-          {% endfor %}
+        <div class="order-cards" id="cards-active">
+          {% include 'orders/_staff_order_cards.html' with orders=active_orders empty_title='Nenhum pedido ativo' empty_text='Os novos pedidos aparecem aqui assim que chegam.' %}
         </div>
       </section>
 
       <section class="order-section" id="section-finished" hidden>
         <div class="order-section-head">
-          <h2 class="order-section-title">Finalizados <span class="order-section-count">{{ inactive_count }}</span></h2>
+          <h2 class="order-section-title">Finalizados <span class="order-section-count" id="count-finished">{{ inactive_count }}</span></h2>
           {% if inactive_orders %}
             <label class="select-all-label">
               <input type="checkbox" class="select-all"> Selecionar todos
             </label>
           {% endif %}
         </div>
-        <div class="order-cards">
-          {% for order in inactive_orders %}
-            {% include 'orders/_staff_order_card.html' %}
-          {% empty %}
-            <div class="empty-state">
-              <h2>Nenhum pedido finalizado</h2>
-              <p>Pedidos entregues ou cancelados aparecem aqui.</p>
-            </div>
-          {% endfor %}
+        <div class="order-cards" id="cards-finished">
+          {% include 'orders/_staff_order_cards.html' with orders=inactive_orders empty_title='Nenhum pedido finalizado' empty_text='Pedidos entregues ou cancelados aparecem aqui.' %}
         </div>
       </section>
 
@@ -154,6 +151,7 @@
 
 {% block extra_js %}
 <script>
+  // ── Seleção em lote (delegação: sobrevive às trocas do tempo real) ──
   (function () {
     var form = document.getElementById('bulk-form');
     if (!form) return;
@@ -162,8 +160,6 @@
     var applyBtn  = document.getElementById('bulk-apply');
     var clearBtn  = document.getElementById('bulk-clear');
     var statusSel = document.getElementById('bulk-status');
-    var checks    = form.querySelectorAll('.order-check');
-    var selectAll = form.querySelectorAll('.select-all');
 
     function selectedCount() {
       return form.querySelectorAll('.order-check:checked').length;
@@ -175,7 +171,7 @@
       bar.classList.toggle('is-active', n > 0);
       document.body.classList.toggle('has-bulk-bar', n > 0);
       applyBtn.disabled = (n === 0 || !statusSel.value);
-      selectAll.forEach(function (sa) {
+      form.querySelectorAll('.select-all').forEach(function (sa) {
         var section = sa.closest('.order-section');
         var boxes = section.querySelectorAll('.order-check');
         var checked = section.querySelectorAll('.order-check:checked').length;
@@ -183,20 +179,22 @@
         sa.indeterminate = checked > 0 && checked < boxes.length;
       });
     }
+    // Exposto para o poller reaplicar o estado da barra após uma troca.
+    window.__refreshBulkBar = refresh;
 
-    checks.forEach(function (c) { c.addEventListener('change', refresh); });
-    selectAll.forEach(function (sa) {
-      sa.addEventListener('change', function () {
-        var section = sa.closest('.order-section');
-        section.querySelectorAll('.order-check').forEach(function (c) {
-          c.checked = sa.checked;
-        });
+    // Delegação: os checkboxes são recriados quando a lista é atualizada.
+    form.addEventListener('change', function (e) {
+      var t = e.target;
+      if (t.classList.contains('select-all')) {
+        var section = t.closest('.order-section');
+        section.querySelectorAll('.order-check').forEach(function (c) { c.checked = t.checked; });
         refresh();
-      });
+      } else if (t.classList.contains('order-check') || t === statusSel) {
+        refresh();
+      }
     });
-    statusSel.addEventListener('change', refresh);
     clearBtn.addEventListener('click', function () {
-      checks.forEach(function (c) { c.checked = false; });
+      form.querySelectorAll('.order-check').forEach(function (c) { c.checked = false; });
       statusSel.value = '';
       refresh();
     });
@@ -207,12 +205,13 @@
     refresh();
   })();
 
-  // ── Modal de resumo do pedido ────────────────────────────────
+  // ── Modal de resumo do pedido (delegação) ────────────────────
   (function () {
     var overlay = document.getElementById('summary-overlay');
     var body    = document.getElementById('summary-body');
     var closeBtn = document.getElementById('summary-close');
-    if (!overlay || !body) return;
+    var form    = document.getElementById('bulk-form');
+    if (!overlay || !body || !form) return;
 
     function openModal() {
       overlay.hidden = false;
@@ -224,21 +223,21 @@
       body.innerHTML = '<p class="summary-loading">Carregando…</p>';
     }
 
-    document.querySelectorAll('.card-view-btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var url = btn.getAttribute('data-summary-url');
-        body.innerHTML = '<p class="summary-loading">Carregando…</p>';
-        openModal();
-        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-          .then(function (r) {
-            if (!r.ok) throw new Error('http ' + r.status);
-            return r.text();
-          })
-          .then(function (html) { body.innerHTML = html; })
-          .catch(function () {
-            body.innerHTML = '<p class="summary-loading">Não foi possível carregar o resumo.</p>';
-          });
-      });
+    form.addEventListener('click', function (e) {
+      var btn = e.target.closest('.card-view-btn');
+      if (!btn) return;
+      var url = btn.getAttribute('data-summary-url');
+      body.innerHTML = '<p class="summary-loading">Carregando…</p>';
+      openModal();
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) {
+          if (!r.ok) throw new Error('http ' + r.status);
+          return r.text();
+        })
+        .then(function (html) { body.innerHTML = html; })
+        .catch(function () {
+          body.innerHTML = '<p class="summary-loading">Não foi possível carregar o resumo.</p>';
+        });
     });
 
     closeBtn.addEventListener('click', closeModal);
@@ -248,6 +247,67 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && !overlay.hidden) closeModal();
     });
+  })();
+
+  // ── Atualização em tempo real do painel (polling) ────────────
+  (function () {
+    var page = document.getElementById('staff-page');
+    if (!page || !page.dataset.feedUrl) return;
+    var feedUrl      = page.dataset.feedUrl;
+    var signature    = page.dataset.signature || '';
+    var POLL_MS      = 12000;
+    var activeWrap   = document.getElementById('cards-active');
+    var finishedWrap = document.getElementById('cards-finished');
+    var countActive  = document.getElementById('count-active');
+    var countFinished = document.getElementById('count-finished');
+    if (!activeWrap || !finishedWrap) return;
+
+    function checkedNumbers() {
+      var set = {};
+      document.querySelectorAll('.order-check:checked').forEach(function (c) { set[c.value] = true; });
+      return set;
+    }
+    function presentNumbers() {
+      var set = {};
+      document.querySelectorAll('.order-check').forEach(function (c) { set[c.value] = true; });
+      return set;
+    }
+
+    function swap(data) {
+      var wasChecked = checkedNumbers();
+      var wasPresent = presentNumbers();
+
+      activeWrap.innerHTML = data.active_html;
+      finishedWrap.innerHTML = data.inactive_html;
+      if (countActive)  countActive.textContent  = data.active_count;
+      if (countFinished) countFinished.textContent = data.inactive_count;
+
+      document.querySelectorAll('.order-check').forEach(function (c) {
+        if (wasChecked[c.value]) c.checked = true;           // mantém a seleção
+        if (!wasPresent[c.value]) {                          // realça o que chegou agora
+          var card = c.closest('.order-card');
+          if (card) card.classList.add('is-new');
+        }
+      });
+
+      if (window.__refreshBulkBar) window.__refreshBulkBar();
+    }
+
+    function poll() {
+      fetch(feedUrl + window.location.search, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok || d.signature === signature) return;
+          signature = d.signature;
+          swap(d);
+        })
+        .catch(function () { /* ignora falhas transitórias de rede */ });
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) poll();
+    });
+    setInterval(function () { if (!document.hidden) poll(); }, POLL_MS);
   })();
 
   // ── Modal de filtros ─────────────────────────────────────────
@@ -265,6 +325,40 @@
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && !overlay.hidden) close();
+    });
+  })();
+
+  // ── Menus de impressão (Caixa / Cozinha / Entregador) ────────
+  // Delegação: cobre o menu da barra e o de cada pedido, inclusive os
+  // cartões recriados pela atualização em tempo real.
+  (function () {
+    function closeAll(except) {
+      document.querySelectorAll('.print-menu-list:not([hidden])').forEach(function (list) {
+        if (list === except) return;
+        list.hidden = true;
+        var btn = list.parentNode.querySelector('[aria-haspopup]');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.print-menu > [aria-haspopup]');
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var list = btn.parentNode.querySelector('.print-menu-list');
+        var willOpen = list.hidden;
+        closeAll(willOpen ? null : list);
+        list.hidden = !willOpen;
+        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        return;
+      }
+      // Clique num item (deixa navegar) ou fora do menu: fecha tudo.
+      closeAll();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeAll();
     });
   })();
 

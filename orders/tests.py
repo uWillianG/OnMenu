@@ -8,7 +8,15 @@ from django.urls import reverse
 
 from menu.models import Category, MenuItem, Restaurant
 
-from .models import CardPayment, City, Neighborhood, Notification, Order, PixPayment
+from .models import (
+    CardPayment,
+    City,
+    Neighborhood,
+    Notification,
+    Order,
+    OrderItem,
+    PixPayment,
+)
 
 
 class OrderNumberSequenceTests(TestCase):
@@ -642,3 +650,286 @@ class CardPaymentTests(TestCase):
         card.refresh_from_db()
         self.assertEqual(card.status, CardPayment.Status.APPROVED)
         self.assertEqual(card.order.payment_status, Order.PaymentStatus.PAID)
+
+
+class AdminNewOrderNotificationTests(TestCase):
+    """Admins recebem uma notificação quando um pedido é realizado."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Test Kitchen', slug='test-kitchen', delivery_fee=Decimal('5.00'),
+        )
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        self.item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+        self.admin1 = User.objects.create_user(
+            username='admin1', password='pw', is_staff=True,
+        )
+        self.admin2 = User.objects.create_user(
+            username='admin2', password='pw', is_staff=True,
+        )
+
+    def _add_item(self, quantity=1):
+        self.client.post(reverse('cart:cart_add', args=[self.item.pk]), {'quantity': quantity})
+
+    def test_offline_checkout_notifies_all_admins(self):
+        self._add_item(quantity=1)
+        self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+                'customer_name': 'Grace Hopper',
+                'phone': '555-0101',
+                'payment_method': Order.PaymentMethod.CASH,
+            },
+        )
+        order = Order.objects.get()
+        # Uma notificação por admin, referenciando o pedido recém-criado.
+        self.assertEqual(Notification.objects.filter(order=order).count(), 2)
+        for admin in (self.admin1, self.admin2):
+            notif = Notification.objects.get(user=admin, order=order)
+            self.assertIn(order.order_number, notif.message)
+            self.assertFalse(notif.is_read)
+
+    def test_pix_checkout_only_notifies_after_payment_confirmed(self):
+        from orders.services import pedidos
+
+        self._add_item(quantity=1)
+        self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+                'customer_name': 'Ada Lovelace',
+                'phone': '555-0100',
+                'payment_method': Order.PaymentMethod.PIX,
+                'customer_cpf': '390.533.447-05',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        order = Order.objects.get()
+        # Pedido online pendente ainda não avisa a equipe.
+        self.assertFalse(Notification.objects.filter(order=order).exists())
+
+        # A confirmação do pagamento avisa os admins — uma única vez (idempotente).
+        pedidos.marcar_pago(order)
+        self.assertEqual(Notification.objects.filter(order=order).count(), 2)
+        pedidos.marcar_pago(order)
+        self.assertEqual(Notification.objects.filter(order=order).count(), 2)
+
+    def test_notifications_feed_returns_count_and_latest_id(self):
+        self.client.force_login(self.admin1)
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            customer_name='X', phone='p',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CASH,
+            subtotal=Decimal('20.00'), total=Decimal('20.00'),
+        )
+        Notification.objects.create(user=self.admin1, order=order, message='a')
+        latest = Notification.objects.create(user=self.admin1, order=order, message='b')
+        # Notificação de outro admin não conta para este usuário.
+        Notification.objects.create(user=self.admin2, order=order, message='c')
+
+        body = self.client.get(reverse('orders:notifications_feed')).json()
+        self.assertTrue(body['ok'])
+        self.assertEqual(body['count'], 2)
+        self.assertEqual(body['latest_id'], latest.id)
+
+    def test_notifications_feed_requires_login(self):
+        response = self.client.get(reverse('orders:notifications_feed'))
+        self.assertEqual(response.status_code, 302)
+
+
+class StaffOrdersFeedTests(TestCase):
+    """Feed de atualização em tempo real do painel de pedidos."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Test Kitchen', slug='test-kitchen', delivery_fee=Decimal('5.00'),
+        )
+        self.staff = User.objects.create_user(
+            username='staff', password='pw', is_staff=True,
+        )
+
+    def _make_order(self, name='Cliente', status=Order.Status.RECEIVED):
+        return Order.objects.create(
+            restaurant=self.restaurant, customer_name=name, phone='555-0000',
+            fulfillment_method=Order.FulfillmentMethod.PICKUP,
+            payment_method=Order.PaymentMethod.CASH,
+            subtotal=Decimal('20.00'), total=Decimal('20.00'), status=status,
+        )
+
+    def test_feed_requires_staff(self):
+        response = self.client.get(reverse('orders:staff_orders_feed'))
+        self.assertEqual(response.status_code, 302)  # redireciona ao login
+
+    def test_staff_page_renders_with_realtime_hooks(self):
+        order = self._make_order('Ativo', Order.Status.RECEIVED)
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('orders:staff_order_list'))
+        self.assertEqual(response.status_code, 200)
+        # Ganchos usados pelo polling em tempo real.
+        self.assertContains(response, 'data-feed-url')
+        self.assertContains(response, 'data-signature=')
+        self.assertContains(response, 'id="cards-active"')
+        self.assertContains(response, 'id="cards-finished"')
+        self.assertContains(response, reverse('orders:staff_orders_feed'))
+        self.assertContains(response, order.order_number)
+
+    def test_feed_returns_cards_counts_and_signature(self):
+        active = self._make_order('Ativo', Order.Status.RECEIVED)
+        done = self._make_order('Feito', Order.Status.DELIVERED)
+        self.client.force_login(self.staff)
+
+        body = self.client.get(reverse('orders:staff_orders_feed')).json()
+        self.assertTrue(body['ok'])
+        self.assertEqual(body['active_count'], 1)
+        self.assertEqual(body['inactive_count'], 1)
+        self.assertIn(active.order_number, body['active_html'])
+        self.assertIn(done.order_number, body['inactive_html'])
+        self.assertTrue(body['signature'])
+        # Os cartões do feed são renderizados com os context processors (moeda).
+        self.assertIn('R$', body['active_html'])
+
+    def test_signature_changes_when_new_order_arrives(self):
+        self._make_order('Primeiro')
+        self.client.force_login(self.staff)
+        sig1 = self.client.get(reverse('orders:staff_orders_feed')).json()['signature']
+
+        self._make_order('Segundo')
+        sig2 = self.client.get(reverse('orders:staff_orders_feed')).json()['signature']
+        self.assertNotEqual(sig1, sig2)
+
+    def test_signature_changes_when_status_changes(self):
+        order = self._make_order('X', Order.Status.RECEIVED)
+        self.client.force_login(self.staff)
+        sig1 = self.client.get(reverse('orders:staff_orders_feed')).json()['signature']
+
+        order.status = Order.Status.PREPARING
+        order.save(update_fields=['status'])
+        sig2 = self.client.get(reverse('orders:staff_orders_feed')).json()['signature']
+        self.assertNotEqual(sig1, sig2)
+
+    def test_feed_respects_status_filter(self):
+        self._make_order('Recebido', Order.Status.RECEIVED)
+        self._make_order('Preparando', Order.Status.PREPARING)
+        self.client.force_login(self.staff)
+
+        body = self.client.get(
+            reverse('orders:staff_orders_feed'), {'status': Order.Status.PREPARING}
+        ).json()
+        self.assertEqual(body['active_count'], 1)
+        self.assertIn('Preparando', body['active_html'])
+        self.assertNotIn('Recebido', body['active_html'])
+
+
+class StaffOrderPrintTests(TestCase):
+    """Impressão de comandas nos três tipos: caixa, cozinha e entregador."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Test Kitchen', slug='test-kitchen', delivery_fee=Decimal('5.00'),
+        )
+        self.staff = User.objects.create_user(
+            username='staff', password='pw', is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    def _make_order(self, **kwargs):
+        defaults = dict(
+            restaurant=self.restaurant,
+            customer_name='Ada Lovelace',
+            phone='41999990000',
+            fulfillment_method=Order.FulfillmentMethod.DELIVERY,
+            payment_method=Order.PaymentMethod.CASH,
+            address_street='Rua Um', address_number='10',
+            address_neighborhood='Centro', address_city='Curitiba',
+            subtotal=Decimal('20.00'), delivery_fee=Decimal('5.00'),
+        )
+        defaults.update(kwargs)
+        order = Order.objects.create(**defaults)
+        OrderItem.objects.create(
+            order=order, item_name='Burger', unit_price=Decimal('20.00'),
+            quantity=2, line_total=Decimal('40.00'), notes='sem cebola',
+        )
+        return order
+
+    def _print(self, order, tipo=None):
+        url = reverse('orders:staff_order_print', args=[order.order_number])
+        if tipo:
+            url += '?tipo=' + tipo
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def test_default_print_is_full_receipt_for_cashier(self):
+        html = self._print(self._make_order())
+        # Comanda completa: preços, pagamento e totais.
+        self.assertIn('Subtotal', html)
+        self.assertIn('Pagamento', html)
+        self.assertIn('R$ 40,00', html)          # preço da linha do item (pt-BR)
+        self.assertNotIn('banner cozinha', html)
+        self.assertNotIn('banner entregador', html)
+
+    def test_kitchen_print_hides_prices_and_payment(self):
+        html = self._print(self._make_order(), tipo='cozinha')
+        self.assertIn('banner cozinha', html)     # faixa da cozinha
+        self.assertIn('2× Burger', html)
+        self.assertIn('sem cebola', html)          # observação do item
+        self.assertNotIn('Subtotal', html)
+        self.assertNotIn('Pagamento', html)
+        self.assertNotIn('R$', html)               # cozinha não mostra preços
+
+    def test_delivery_print_shows_address_and_amount_due(self):
+        html = self._print(self._make_order(), tipo='entregador')  # dinheiro, não pago
+        self.assertIn('banner entregador', html)
+        self.assertIn('Rua Um', html)
+        self.assertIn('41999990000', html)
+        self.assertIn('A COBRAR', html)
+        self.assertIn('R$ 25,00', html)           # total = 20 + 5 (pt-BR)
+        self.assertNotIn('Subtotal', html)
+
+    def test_delivery_print_marks_paid_orders(self):
+        order = self._make_order(
+            payment_method=Order.PaymentMethod.PIX,
+            payment_status=Order.PaymentStatus.PAID,
+        )
+        html = self._print(order, tipo='entregador')
+        self.assertIn('PAGO', html)
+        self.assertNotIn('A COBRAR', html)
+
+    def test_invalid_variant_falls_back_to_full(self):
+        html = self._print(self._make_order(), tipo='hacker')
+        self.assertIn('Subtotal', html)
+        self.assertNotIn('banner cozinha', html)
+        self.assertNotIn('banner entregador', html)
+
+    def test_print_active_supports_variant(self):
+        self._make_order(status=Order.Status.RECEIVED)
+        url = reverse('orders:staff_orders_print_active') + '?tipo=cozinha'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('banner cozinha', response.content.decode())
+
+    def test_order_card_offers_three_print_variants(self):
+        order = self._make_order(status=Order.Status.RECEIVED)
+        html = self.client.get(reverse('orders:staff_order_list')).content.decode()
+        base = reverse('orders:staff_order_print', args=[order.order_number])
+        self.assertIn(base + '?tipo=completa', html)
+        self.assertIn(base + '?tipo=cozinha', html)
+        self.assertIn(base + '?tipo=entregador', html)
+
+    def test_summary_modal_offers_three_print_variants(self):
+        order = self._make_order()
+        html = self.client.get(
+            reverse('orders:staff_order_summary', args=[order.order_number])
+        ).content.decode()
+        base = reverse('orders:staff_order_print', args=[order.order_number])
+        self.assertIn(base + '?tipo=completa', html)
+        self.assertIn(base + '?tipo=cozinha', html)
+        self.assertIn(base + '?tipo=entregador', html)
