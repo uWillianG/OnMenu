@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from ..models import Order
+from ..models import Order, OrderStatusChange
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,26 @@ def marcar_recusado(order: Order) -> None:
 
 def marcar_cancelado(order: Order) -> None:
     _set_order_status(order, Order.PaymentStatus.CANCELLED)
+
+
+def registrar_status(order: Order, from_status: str = '', user=None):
+    """Guarda uma entrada na linha do tempo do pedido (quem mudou o quê).
+
+    Best-effort: a auditoria nunca pode derrubar o checkout nem a ação de quem
+    está no painel. ``from_status`` vazio marca a criação do pedido.
+    """
+    if from_status == order.status:
+        return None
+    try:
+        return OrderStatusChange.objects.create(
+            order=order,
+            from_status=from_status,
+            to_status=order.status,
+            changed_by=user if (user is not None and user.is_authenticated) else None,
+        )
+    except Exception:  # noqa: BLE001 - auditoria não interrompe a operação
+        logger.exception('Falha ao registrar mudança de situação de %s', order.order_number)
+        return None
 
 
 def _payment_status_for(payment, mp_status):

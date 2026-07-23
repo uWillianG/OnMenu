@@ -58,6 +58,24 @@
           </div>
         </div>
 
+        <div class="form-field">
+          <span class="form-label">Regras de entrega</span>
+          <div class="manage-form-row">
+            <div class="form-field">
+              <label class="form-label-opt" for="{{ form.minimum_order.id_for_label }}">{{ form.minimum_order.label }}</label>
+              {{ form.minimum_order }}
+              {% if form.minimum_order.help_text %}<small class="auth-help">{{ form.minimum_order.help_text }}</small>{% endif %}
+              {% if form.minimum_order.errors %}<ul class="errorlist">{% for e in form.minimum_order.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="form-field">
+              <label class="form-label-opt" for="{{ form.free_delivery_above.id_for_label }}">{{ form.free_delivery_above.label }}</label>
+              {{ form.free_delivery_above }}
+              {% if form.free_delivery_above.help_text %}<small class="auth-help">{{ form.free_delivery_above.help_text }}</small>{% endif %}
+              {% if form.free_delivery_above.errors %}<ul class="errorlist">{% for e in form.free_delivery_above.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+          </div>
+        </div>
+
         <div class="hours-form-actions">
           <a class="btn-secondary" href="{% url 'menu:restaurant_info' %}">Cancelar</a>
           <button type="submit" class="btn-primary">Salvar alterações</button>

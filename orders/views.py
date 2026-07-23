@@ -69,6 +69,11 @@ def checkout(request):
         form = CheckoutForm(request.POST)
         is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
         if form.is_valid():
+            # Só depois de validar o form dá para saber se é entrega ou retirada.
+            minimo = _minimum_order_error(restaurant, form.cleaned_data, cart.subtotal)
+            if minimo:
+                form.add_error('fulfillment_method', minimo)
+        if form.is_valid():
             order = _create_order_from_cart(
                 form=form,
                 cart=cart,
@@ -126,8 +131,31 @@ def checkout(request):
             'estimated_total': cart.subtotal,
             'delivery_areas': _delivery_areas_data(),
             'restaurant': restaurant,
+            'free_delivery_missing': restaurant.missing_for_free_delivery(cart.subtotal),
+            'minimum_missing': restaurant.missing_for_minimum(cart.subtotal),
             'mercadopago_public_key': settings.MERCADOPAGO_PUBLIC_KEY,
         },
+    )
+
+
+def _money(value):
+    """Formata um Decimal no padrão brasileiro, para mensagens ao cliente."""
+    return f'{settings.CURRENCY_SYMBOL} {value:.2f}'.replace('.', ',')
+
+
+def _minimum_order_error(restaurant, cleaned_data, subtotal):
+    """Mensagem de pedido mínimo, quando o carrinho não alcança o valor.
+
+    A regra vale só para entrega — retirada no balcão não tem mínimo.
+    """
+    if cleaned_data.get('fulfillment_method') != Order.FulfillmentMethod.DELIVERY:
+        return ''
+    missing = restaurant.missing_for_minimum(subtotal)
+    if missing is None:
+        return ''
+    return (
+        f'O pedido mínimo para entrega é {_money(restaurant.minimum_order)}. '
+        f'Faltam {_money(missing)} — ou escolha retirada no local.'
     )
 
 
@@ -647,6 +675,27 @@ def staff_order_list(request):
 
 
 @staff_member_required
+def staff_reports(request):
+    """Relatórios de venda do estabelecimento (faturamento, ticket, ranking)."""
+    period, period_label, start, end = selectors.resolve_report_period(
+        request.GET.get('periodo', ''),
+    )
+    report = selectors.get_sales_report(start, end)
+    return render(
+        request,
+        'orders/staff_reports.html',
+        {
+            'report': report,
+            'period': period,
+            'period_label': period_label,
+            'period_choices': [
+                (key, label) for key, (label, _days) in selectors.REPORT_PERIODS.items()
+            ],
+        },
+    )
+
+
+@staff_member_required
 def staff_orders_feed(request):
     """Atualização em tempo real do painel (polling).
 
@@ -769,7 +818,9 @@ def staff_orders_bulk_update(request):
         changed = list(selected.exclude(status=new_status))
         updated = selected.update(status=new_status, updated_at=timezone.now())
         for order in changed:
+            previous_status = order.status
             order.status = new_status
+            pedidos_service.registrar_status(order, previous_status, request.user)
             notificacoes_service.notificar_status_pedido(order)
         label = Order.Status(new_status).label
         messages.success(
@@ -789,7 +840,10 @@ def staff_orders_bulk_update(request):
 @require_http_methods(['GET', 'POST'])
 def staff_order_detail(request, order_number):
     order = get_object_or_404(
-        Order.objects.select_related('restaurant').prefetch_related('items__options'),
+        Order.objects.select_related('restaurant').prefetch_related(
+            'items__options',
+            'status_changes__changed_by',
+        ),
         order_number=order_number,
     )
 
@@ -802,6 +856,7 @@ def staff_order_detail(request, order_number):
         if form.is_valid():
             form.save()
             if order.status != previous_status:
+                pedidos_service.registrar_status(order, previous_status, request.user)
                 notificacoes_service.notificar_status_pedido(order)
             messages.success(request, f'Status do pedido {order.order_number} atualizado.')
             url = reverse('orders:staff_order_detail', args=[order.order_number])
@@ -910,16 +965,19 @@ def _create_order_from_cart(form, cart, cart_items, restaurant, user=None):
     if order.fulfillment_method == Order.FulfillmentMethod.DELIVERY:
         order.address_city = city.name if city else ''
         order.address_neighborhood = neighborhood.name if neighborhood else ''
-        order.delivery_fee = (
+        base_fee = (
             (city.delivery_fee if city else Decimal('0.00'))
             + (neighborhood.delivery_fee if neighborhood else Decimal('0.00'))
         )
+        # Zera a taxa quando o carrinho passa do valor de frete grátis.
+        order.delivery_fee = restaurant.delivery_fee_for(order.subtotal, base_fee)
     else:
         order.address_city = ''
         order.address_neighborhood = ''
         order.delivery_fee = Decimal('0.00')
 
     order.save()
+    pedidos_service.registrar_status(order, user=user)
 
     for entry in cart_items:
         item = entry['item']

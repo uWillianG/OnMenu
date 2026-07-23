@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=131">
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=133">
 </head>
 <body>
 
@@ -102,6 +102,11 @@
           <span class="sidebar-ico">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>
           </span> Painel de pedidos
+        </a>
+        <a class="sidebar-link {% if view == 'orders:staff_reports' %}is-active{% endif %}" href="{% url 'orders:staff_reports' %}">
+          <span class="sidebar-ico">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </span> Relatórios
         </a>
         <a class="sidebar-link {% if view == 'menu:edit_business_hours' %}is-active{% endif %}" href="{% url 'menu:edit_business_hours' %}">
           <span class="sidebar-ico">

@@ -23,6 +23,7 @@ urlpatterns = [
     path('webhook/pix/', views.webhook_pix, name='webhook_pix'),
     path('webhook/cartao/', views.webhook_card, name='webhook_card'),
     path('staff/orders/', views.staff_order_list, name='staff_order_list'),
+    path('staff/relatorios/', views.staff_reports, name='staff_reports'),
     path('staff/orders/feed/', views.staff_orders_feed, name='staff_orders_feed'),
     path(
         'staff/orders/bulk-update/',

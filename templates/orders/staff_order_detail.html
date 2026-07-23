@@ -71,6 +71,30 @@
           <div class="summary-row grand"><span>Total</span><strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong></div>
         </div>
 
+        {% if order.status_changes.all %}
+          <div class="detail-card">
+            <div class="detail-card-title">
+              <svg class="title-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+              Histórico
+            </div>
+            <ol class="history-list">
+              {% for change in order.status_changes.all %}
+                <li class="history-row">
+                  <span class="history-dot" aria-hidden="true"></span>
+                  <span class="history-body">
+                    <span class="history-status">
+                      {% if change.from_status %}{{ change.to_status_display }}{% else %}Pedido recebido{% endif %}
+                    </span>
+                    <span class="history-meta">
+                      {{ change.created_at|date:'d/m/Y H:i' }} · {{ change.author_display }}
+                    </span>
+                  </span>
+                </li>
+              {% endfor %}
+            </ol>
+          </div>
+        {% endif %}
+
       </div>
 
       <form method="post" class="detail-card" style="align-content:start">

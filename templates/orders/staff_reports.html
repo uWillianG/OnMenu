@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatórios | OnMenu{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <div class="staff-page">
+
+    <div class="split-heading">
+      <h1 class="page-h1">
+        <svg class="h1-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Relatórios
+      </h1>
+      <a class="btn-secondary" href="{% url 'orders:staff_order_list' %}">Painel de pedidos</a>
+    </div>
+
+    {# ── Período ── #}
+    <nav class="report-periods" aria-label="Período do relatório">
+      {% for key, label in period_choices %}
+        <a class="report-period{% if key == period %} is-active{% endif %}"
+           href="?periodo={{ key }}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+
+    {# ── Números do período ── #}
+    <div class="report-stats">
+      <div class="report-stat is-primary">
+        <span class="report-stat-label">Faturamento</span>
+        <strong class="report-stat-value">{{ currency_symbol }} {{ report.revenue|floatformat:2 }}</strong>
+        <span class="report-stat-hint">
+          {{ currency_symbol }} {{ report.items_revenue|floatformat:2 }} em itens ·
+          {{ currency_symbol }} {{ report.delivery_revenue|floatformat:2 }} em entregas
+        </span>
+      </div>
+      <div class="report-stat">
+        <span class="report-stat-label">Pedidos</span>
+        <strong class="report-stat-value">{{ report.order_count }}</strong>
+        <span class="report-stat-hint">
+          {% if report.cancelled_count %}{{ report.cancelled_count }} cancelado{{ report.cancelled_count|pluralize }} fora da conta{% else %}nenhum cancelamento{% endif %}
+        </span>
+      </div>
+      <div class="report-stat">
+        <span class="report-stat-label">Ticket médio</span>
+        <strong class="report-stat-value">{{ currency_symbol }} {{ report.average_ticket|floatformat:2 }}</strong>
+        <span class="report-stat-hint">por pedido no período</span>
+      </div>
+    </div>
+
+    {% if report.order_count %}
+
+      {# ── Faturamento por dia ── #}
+      <section class="detail-card">
+        <div class="detail-card-title">
+          <svg class="title-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Faturamento por dia
+        </div>
+        <div class="report-chart" role="list">
+          {% for point in report.daily %}
+            <div class="report-bar" role="listitem"
+                 title="{{ point.day|date:'d/m/Y' }} — {{ currency_symbol }} {{ point.revenue|floatformat:2 }} ({{ point.order_count }} pedido{{ point.order_count|pluralize }})">
+              <span class="report-bar-track">
+                <span class="report-bar-fill" style="height:{{ point.percent }}%"></span>
+              </span>
+              <span class="report-bar-label">{{ point.day|date:'d/m' }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="info-grid">
+
+        {# ── Mais vendidos ── #}
+        <section class="detail-card">
+          <div class="detail-card-title">
+            <svg class="title-ico" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Mais vendidos
+          </div>
+          <ol class="report-rank">
+            {% for item in report.top_items %}
+              <li class="report-rank-row">
+                <span class="report-rank-pos">{{ forloop.counter }}</span>
+                <span class="report-rank-name">{{ item.item_name }}</span>
+                <span class="report-rank-qty">{{ item.quantity }}×</span>
+                <span class="report-rank-value">{{ currency_symbol }} {{ item.revenue|floatformat:2 }}</span>
+              </li>
+            {% empty %}
+              <li class="info-empty">Nenhum item vendido no período.</li>
+            {% endfor %}
+          </ol>
+        </section>
+
+        {# ── Como pagaram / como receberam ── #}
+        <section class="detail-card">
+          <div class="detail-card-title">
+            <svg class="title-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Formas de pagamento
+          </div>
+          {% for row in report.by_payment %}
+            <div class="report-split">
+              <div class="report-split-head">
+                <span class="report-split-label">{{ row.label }}</span>
+                <span class="report-split-value">{{ currency_symbol }} {{ row.revenue|floatformat:2 }}</span>
+              </div>
+              <div class="report-split-bar"><span style="width:{{ row.percent }}%"></span></div>
+              <span class="report-split-hint">{{ row.order_count }} pedido{{ row.order_count|pluralize }} · {{ row.percent }}%</span>
+            </div>
+          {% endfor %}
+
+          <div class="detail-divider"></div>
+
+          <div class="detail-card-title">
+            <svg class="title-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            Entrega e retirada
+          </div>
+          {% for row in report.by_fulfillment %}
+            <div class="report-split">
+              <div class="report-split-head">
+                <span class="report-split-label">{{ row.label }}</span>
+                <span class="report-split-value">{{ currency_symbol }} {{ row.revenue|floatformat:2 }}</span>
+              </div>
+              <div class="report-split-bar"><span style="width:{{ row.percent }}%"></span></div>
+              <span class="report-split-hint">{{ row.order_count }} pedido{{ row.order_count|pluralize }} · {{ row.percent }}%</span>
+            </div>
+          {% endfor %}
+        </section>
+
+      </div>
+
+    {% else %}
+      <div class="empty-state">
+        <h2>Nenhum pedido no período</h2>
+        <p>{{ period_label }} · assim que os pedidos entrarem, os números aparecem aqui.</p>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

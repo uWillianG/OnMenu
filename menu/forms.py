@@ -34,6 +34,8 @@ class RestaurantInfoForm(forms.ModelForm):
             'whatsapp_number',
             'delivery_time_min',
             'delivery_time_max',
+            'minimum_order',
+            'free_delivery_above',
         ]
         labels = {
             'address': 'Endereço',
@@ -41,9 +43,13 @@ class RestaurantInfoForm(forms.ModelForm):
             'whatsapp_number': 'WhatsApp',
             'delivery_time_min': 'Tempo mínimo (min)',
             'delivery_time_max': 'Tempo máximo (min)',
+            'minimum_order': 'Pedido mínimo',
+            'free_delivery_above': 'Entrega grátis a partir de',
         }
         help_texts = {
             'whatsapp_number': 'Inclua o DDD. Vira um link wa.me automaticamente.',
+            'minimum_order': 'Vale só para entrega. 0 = sem mínimo.',
+            'free_delivery_above': 'Deixe vazio para sempre cobrar a taxa.',
         }
         widgets = {
             'address': forms.TextInput(attrs={
@@ -70,7 +76,24 @@ class RestaurantInfoForm(forms.ModelForm):
                 'min': 0,
                 'placeholder': '45',
             }),
+            'minimum_order': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': 0,
+                'step': '0.01',
+                'placeholder': '0,00',
+            }),
+            'free_delivery_above': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'min': 0,
+                'step': '0.01',
+                'placeholder': 'Ex: 80,00',
+            }),
         }
+
+    def clean_minimum_order(self):
+        """Campo em branco significa "sem pedido mínimo"."""
+        value = self.cleaned_data.get('minimum_order')
+        return Decimal('0.00') if value is None else value
 
     def clean(self):
         cleaned = super().clean()

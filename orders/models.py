@@ -498,6 +498,56 @@ class Notification(models.Model):
         return self.message
 
 
+class OrderStatusChange(models.Model):
+    """Histórico de quem mudou a situação do pedido, e quando.
+
+    O pedido guarda só a situação atual; sem este registro não dá para saber
+    quem marcou como entregue nem quanto tempo o pedido ficou em cada etapa.
+    """
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='status_changes',
+    )
+    # Vazio na primeira entrada (criação do pedido).
+    from_status = models.CharField(
+        'De',
+        max_length=30,
+        choices=Order.Status.choices,
+        blank=True,
+    )
+    to_status = models.CharField('Para', max_length=30, choices=Order.Status.choices)
+    # Nulo quando a mudança veio do próprio checkout (sem alguém da equipe).
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='order_status_changes',
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        verbose_name = 'mudança de situação'
+        verbose_name_plural = 'mudanças de situação'
+
+    def __str__(self):
+        return f'{self.order.order_number}: {self.from_status or "novo"} → {self.to_status}'
+
+    @property
+    def author_display(self):
+        """Quem fez a mudança, para a linha do tempo do painel."""
+        if self.changed_by is None:
+            return 'Cliente' if not self.from_status else 'Sistema'
+        return self.changed_by.get_full_name() or self.changed_by.get_username()
+
+    @property
+    def to_status_display(self):
+        return self.order.label_for_status(self.to_status)
+
+
 class OrderItemOption(models.Model):
     order_item = models.ForeignKey(
         OrderItem,

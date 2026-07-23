@@ -26,6 +26,22 @@ class Restaurant(models.Model):
         blank=True,
         help_text='Tempo máximo de entrega, em minutos.',
     )
+    minimum_order = models.DecimalField(
+        'Pedido mínimo',
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        blank=True,
+        help_text='Valor mínimo dos itens para pedidos com entrega. 0 = sem mínimo.',
+    )
+    free_delivery_above = models.DecimalField(
+        'Entrega grátis a partir de',
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Acima deste valor em itens a taxa de entrega é zerada. Vazio = sempre cobra.',
+    )
     accepts_delivery = models.BooleanField(default=True)
     accepts_pickup = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
@@ -41,6 +57,24 @@ class Restaurant(models.Model):
 
     def __str__(self):
         return self.name
+
+    def delivery_fee_for(self, subtotal, base_fee):
+        """Taxa de entrega a cobrar, já considerando a política de frete grátis."""
+        if self.free_delivery_above is not None and subtotal >= self.free_delivery_above:
+            return Decimal('0.00')
+        return base_fee
+
+    def missing_for_free_delivery(self, subtotal):
+        """Quanto falta para o frete grátis (``None`` quando não se aplica)."""
+        if self.free_delivery_above is None or subtotal >= self.free_delivery_above:
+            return None
+        return self.free_delivery_above - subtotal
+
+    def missing_for_minimum(self, subtotal):
+        """Quanto falta para atingir o pedido mínimo (``None`` quando já atingiu)."""
+        if not self.minimum_order or subtotal >= self.minimum_order:
+            return None
+        return self.minimum_order - subtotal
 
     @property
     def delivery_time_display(self):

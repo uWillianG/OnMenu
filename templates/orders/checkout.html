@@ -155,7 +155,8 @@
 
     <aside class="checkout-summary"
            data-subtotal="{{ subtotal|floatformat:2 }}"
-           data-currency="{{ currency_symbol }}">
+           data-currency="{{ currency_symbol }}"
+           {% if restaurant.free_delivery_above is not None %}data-free-delivery-above="{{ restaurant.free_delivery_above|floatformat:2 }}"{% endif %}>
       <div class="cart-summary-panel">
         <div class="summary-title">Resumo do pedido</div>
         <div class="summary-items">
@@ -179,6 +180,24 @@
           <span>Total</span>
           <strong>{{ currency_symbol }} <span id="summary-total">{{ estimated_total|floatformat:2 }}</span></strong>
         </div>
+        {% if free_delivery_missing %}
+          <p class="summary-note" id="summary-note-free">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            Faltam {{ currency_symbol }} {{ free_delivery_missing|floatformat:2 }} para a <strong>entrega grátis</strong>.
+          </p>
+        {% elif restaurant.free_delivery_above is not None %}
+          <p class="summary-note is-good" id="summary-note-free">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Seu pedido tem <strong>entrega grátis</strong>.
+          </p>
+        {% endif %}
+        {% if minimum_missing %}
+          <p class="summary-note is-warn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Pedido mínimo de {{ currency_symbol }} {{ restaurant.minimum_order|floatformat:2 }} para entrega —
+            faltam {{ currency_symbol }} {{ minimum_missing|floatformat:2 }}.
+          </p>
+        {% endif %}
       </div>
     </aside>
 
@@ -314,6 +333,10 @@
 
   const CURRENCY = summary ? (summary.dataset.currency || '') : '';
   const subtotal = num(summary && summary.dataset.subtotal);
+  // Valor a partir do qual a entrega é grátis (vazio = política desligada).
+  const freeAbove = (summary && summary.dataset.freeDeliveryAbove)
+    ? num(summary.dataset.freeDeliveryAbove)
+    : null;
 
   function num(v) { return parseFloat((v || '0').toString().replace(',', '.')) || 0; }
   function money(n) { return n.toFixed(2); }
@@ -351,17 +374,22 @@
 
     let fee = 0;
     let resolved = pickup;
+    let freeShipping = false;
     if (!pickup && citySel && nbSel && citySel.value && nbSel.value) {
       const cityFee = num(AREAS[citySel.value] && AREAS[citySel.value].fee);
       const nbOpt   = nbSel.selectedOptions[0];
       fee = cityFee + num(nbOpt && nbOpt.dataset.fee);
       resolved = true;
+      if (freeAbove !== null && subtotal >= freeAbove) {
+        fee = 0;
+        freeShipping = true;
+      }
     }
 
     if (delVal) {
       delVal.textContent = (!pickup && !resolved)
         ? 'Selecione o bairro'
-        : CURRENCY + ' ' + money(fee);
+        : (freeShipping ? 'Grátis' : CURRENCY + ' ' + money(fee));
     }
     const total = subtotal + fee;
     if (totalEl)  totalEl.textContent  = money(total);

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,6 +11,7 @@ from django.contrib.auth.models import User
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from menu.models import Category, MenuItem, Restaurant
 
@@ -205,6 +207,290 @@ class WebhookSignatureTests(TestCase):
             headers={'x-signature': f'ts={ts},v1={v1}', 'x-request-id': request_id},
         )
         self.assertEqual(response.status_code, 200)
+
+
+class DeliveryRulesTests(TestCase):
+    """Pedido mínimo e entrega grátis a partir de um valor."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(
+            name='Rules Kitchen', slug='rules', minimum_order=Decimal('40.00'),
+            free_delivery_above=Decimal('60.00'),
+        )
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        self.item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+        self.city = City.objects.create(name='Curitiba', delivery_fee=Decimal('4.00'))
+        self.neighborhood = Neighborhood.objects.create(
+            city=self.city, name='Centro', delivery_fee=Decimal('3.00'),
+        )
+
+    def _add(self, quantity):
+        self.client.post(reverse('cart:cart_add', args=[self.item.pk]), {'quantity': quantity})
+
+    def _checkout(self, **overrides):
+        data = {
+            'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
+            'customer_name': 'Ada Lovelace',
+            'phone': '555-0100',
+            'city': self.city.pk,
+            'neighborhood': self.neighborhood.pk,
+            'address_street': 'Code Street',
+            'address_number': '1',
+            'payment_method': Order.PaymentMethod.CASH,
+        }
+        data.update(overrides)
+        return self.client.post(reverse('orders:checkout'), data)
+
+    def test_delivery_below_minimum_is_blocked(self):
+        self._add(1)  # 20,00 < 40,00
+
+        response = self._checkout()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Order.objects.exists())
+        self.assertContains(response, 'pedido mínimo para entrega')
+        self.assertContains(response, 'Faltam')
+
+    def test_pickup_ignores_the_minimum(self):
+        self._add(1)
+
+        self._checkout(
+            fulfillment_method=Order.FulfillmentMethod.PICKUP, city='', neighborhood='',
+        )
+
+        order = Order.objects.get()
+        self.assertEqual(order.subtotal, Decimal('20.00'))
+
+    def test_delivery_above_minimum_charges_the_fee(self):
+        self._add(2)  # 40,00 — atinge o mínimo, mas não o frete grátis
+
+        self._checkout()
+
+        order = Order.objects.get()
+        self.assertEqual(order.delivery_fee, Decimal('7.00'))
+        self.assertEqual(order.total, Decimal('47.00'))
+
+    def test_free_delivery_above_threshold(self):
+        self._add(3)  # 60,00 — atinge o frete grátis
+
+        self._checkout()
+
+        order = Order.objects.get()
+        self.assertEqual(order.subtotal, Decimal('60.00'))
+        self.assertEqual(order.delivery_fee, Decimal('0.00'))
+        self.assertEqual(order.total, Decimal('60.00'))
+
+    def test_cart_shows_how_much_is_missing(self):
+        self._add(1)
+
+        response = self.client.get(reverse('cart:cart_detail'))
+
+        self.assertContains(response, 'para a <strong>entrega grátis</strong>', html=False)
+        self.assertContains(response, 'Pedido mínimo')
+
+    def test_restaurant_helpers(self):
+        self.assertEqual(self.restaurant.missing_for_minimum(Decimal('10.00')), Decimal('30.00'))
+        self.assertIsNone(self.restaurant.missing_for_minimum(Decimal('40.00')))
+        self.assertEqual(
+            self.restaurant.missing_for_free_delivery(Decimal('50.00')), Decimal('10.00'),
+        )
+        self.assertIsNone(self.restaurant.missing_for_free_delivery(Decimal('60.00')))
+        self.assertEqual(
+            self.restaurant.delivery_fee_for(Decimal('60.00'), Decimal('7.00')), Decimal('0.00'),
+        )
+        self.assertEqual(
+            self.restaurant.delivery_fee_for(Decimal('20.00'), Decimal('7.00')), Decimal('7.00'),
+        )
+
+
+class OrderStatusHistoryTests(TestCase):
+    """Auditoria: quem mudou a situação do pedido, e quando."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Hist Kitchen', slug='hist')
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        self.item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+        self.staff = User.objects.create_user(
+            username='chef', password='pw', is_staff=True, first_name='Chef',
+        )
+
+    def _place_order(self):
+        self.client.post(reverse('cart:cart_add', args=[self.item.pk]), {'quantity': 1})
+        self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+                'customer_name': 'Ada Lovelace',
+                'phone': '555-0100',
+                'payment_method': Order.PaymentMethod.CASH,
+            },
+        )
+        return Order.objects.get()
+
+    def test_checkout_records_the_first_entry(self):
+        order = self._place_order()
+
+        entries = list(order.status_changes.all())
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].from_status, '')
+        self.assertEqual(entries[0].to_status, Order.Status.RECEIVED)
+        self.assertIsNone(entries[0].changed_by)
+
+    def test_staff_update_records_who_changed_it(self):
+        order = self._place_order()
+        self.client.force_login(self.staff)
+
+        self.client.post(
+            reverse('orders:staff_order_detail', args=[order.order_number]),
+            {'status': Order.Status.PREPARING},
+        )
+
+        last = order.status_changes.last()
+        self.assertEqual(last.from_status, Order.Status.RECEIVED)
+        self.assertEqual(last.to_status, Order.Status.PREPARING)
+        self.assertEqual(last.changed_by, self.staff)
+        self.assertEqual(last.author_display, 'Chef')
+
+    def test_same_status_is_not_recorded_twice(self):
+        order = self._place_order()
+        self.client.force_login(self.staff)
+
+        self.client.post(
+            reverse('orders:staff_order_detail', args=[order.order_number]),
+            {'status': Order.Status.RECEIVED},
+        )
+
+        self.assertEqual(order.status_changes.count(), 1)
+
+    def test_bulk_update_records_the_change(self):
+        order = self._place_order()
+        self.client.force_login(self.staff)
+
+        self.client.post(
+            reverse('orders:staff_orders_bulk_update'),
+            {'order_numbers': [order.order_number], 'status': Order.Status.OUT_FOR_DELIVERY},
+        )
+
+        last = order.status_changes.last()
+        self.assertEqual(last.to_status, Order.Status.OUT_FOR_DELIVERY)
+        self.assertEqual(last.changed_by, self.staff)
+
+    def test_history_shows_up_on_the_detail_page(self):
+        order = self._place_order()
+        self.client.force_login(self.staff)
+
+        response = self.client.get(
+            reverse('orders:staff_order_detail', args=[order.order_number]),
+        )
+
+        self.assertContains(response, 'Histórico')
+        self.assertContains(response, 'Pedido recebido')
+
+
+class StaffReportsTests(TestCase):
+    """Relatórios de venda do painel."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Rep Kitchen', slug='rep')
+        self.staff = User.objects.create_user(username='dono', password='pw', is_staff=True)
+        self.url = reverse('orders:staff_reports')
+
+    def _order(self, total, status=Order.Status.DELIVERED, **extra):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            customer_name='Cliente',
+            phone='000',
+            subtotal=total,
+            status=status,
+            **extra,
+        )
+        OrderItem.objects.create(
+            order=order, item_name='Burger', unit_price=total, quantity=1, line_total=total,
+        )
+        return order
+
+    def test_requires_staff(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+
+    def test_shows_revenue_orders_and_average_ticket(self):
+        self._order(Decimal('30.00'))
+        self._order(Decimal('50.00'))
+        self.client.force_login(self.staff)
+
+        report = self.client.get(self.url).context['report']
+
+        self.assertEqual(report['revenue'], Decimal('80.00'))
+        self.assertEqual(report['order_count'], 2)
+        self.assertEqual(report['average_ticket'], Decimal('40.00'))
+
+    def test_cancelled_orders_are_left_out(self):
+        self._order(Decimal('30.00'))
+        self._order(Decimal('90.00'), status=Order.Status.CANCELLED)
+        self.client.force_login(self.staff)
+
+        report = self.client.get(self.url).context['report']
+
+        self.assertEqual(report['revenue'], Decimal('30.00'))
+        self.assertEqual(report['order_count'], 1)
+        self.assertEqual(report['cancelled_count'], 1)
+
+    def test_top_items_ranking(self):
+        order = self._order(Decimal('30.00'))
+        OrderItem.objects.create(
+            order=order, item_name='Batata', unit_price=Decimal('10.00'),
+            quantity=5, line_total=Decimal('50.00'),
+        )
+        self.client.force_login(self.staff)
+
+        top = self.client.get(self.url).context['report']['top_items']
+
+        self.assertEqual(top[0]['item_name'], 'Batata')
+        self.assertEqual(top[0]['quantity'], 5)
+        self.assertEqual(top[0]['revenue'], Decimal('50.00'))
+
+    def test_breakdown_by_payment_method(self):
+        self._order(Decimal('30.00'), payment_method=Order.PaymentMethod.PIX)
+        self._order(Decimal('10.00'), payment_method=Order.PaymentMethod.PIX)
+        self._order(Decimal('60.00'), payment_method=Order.PaymentMethod.CASH)
+        self.client.force_login(self.staff)
+
+        rows = self.client.get(self.url).context['report']['by_payment']
+
+        self.assertEqual(rows[0]['label'], 'PIX')
+        self.assertEqual(rows[0]['order_count'], 2)
+        self.assertEqual(rows[0]['percent'], 67)
+
+    def test_period_filter_limits_the_window(self):
+        old = self._order(Decimal('100.00'))
+        Order.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=10),
+        )
+        self._order(Decimal('25.00'))
+        self.client.force_login(self.staff)
+
+        today = self.client.get(self.url).context['report']
+        month = self.client.get(self.url, {'periodo': '30d'}).context['report']
+
+        self.assertEqual(today['revenue'], Decimal('25.00'))
+        self.assertEqual(month['revenue'], Decimal('125.00'))
+
+    def test_empty_period_renders_the_placeholder(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'Nenhum pedido no período')
 
 
 class OrderTotalsTests(TestCase):

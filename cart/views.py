@@ -5,6 +5,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from menu.models import MenuItem
+from menu.selectors import get_current_restaurant
 
 from .cart import Cart
 from .validators import clean_options
@@ -13,6 +14,7 @@ from .validators import clean_options
 def cart_detail(request):
     cart = Cart(request)
     cart_items = cart.items
+    restaurant = get_current_restaurant()
 
     # Itens disponíveis (únicos) para alimentar o modal "adicionar ao carrinho",
     # o mesmo aberto ao clicar num produto na tela principal. Prefetch dos
@@ -35,6 +37,14 @@ def cart_detail(request):
             'cart_items': cart_items,
             'subtotal': cart.subtotal,
             'modal_items': modal_items,
+            'restaurant': restaurant,
+            # Empurrões de valor: quanto falta para o frete grátis / pedido mínimo.
+            'free_delivery_missing': (
+                restaurant.missing_for_free_delivery(cart.subtotal) if restaurant else None
+            ),
+            'minimum_missing': (
+                restaurant.missing_for_minimum(cart.subtotal) if restaurant else None
+            ),
         },
     )
 

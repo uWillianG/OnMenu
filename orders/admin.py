@@ -8,6 +8,7 @@ from .models import (
     Order,
     OrderItem,
     OrderItemOption,
+    OrderStatusChange,
     PixPayment,
 )
 
@@ -63,6 +64,21 @@ class OrderItemInline(admin.TabularInline):
     show_change_link = True
 
 
+class OrderStatusChangeInline(admin.TabularInline):
+    model = OrderStatusChange
+    extra = 0
+    readonly_fields = ('from_status', 'to_status', 'changed_by', 'created_at')
+    can_delete = False
+
+
+@admin.register(OrderStatusChange)
+class OrderStatusChangeAdmin(admin.ModelAdmin):
+    list_display = ('order', 'from_status', 'to_status', 'changed_by', 'created_at')
+    list_filter = ('to_status', 'created_at')
+    search_fields = ('order__order_number', 'changed_by__username')
+    readonly_fields = ('order', 'from_status', 'to_status', 'changed_by', 'created_at')
+
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = (
@@ -93,7 +109,7 @@ class OrderAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     )
-    inlines = [OrderItemInline]
+    inlines = [OrderItemInline, OrderStatusChangeInline]
 
 
 @admin.register(OrderItem)
