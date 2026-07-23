@@ -1,13 +1,17 @@
 import json
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.contrib.admin.sites import site as admin_site
 from django.contrib.auth.models import User
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 
 from menu.models import Category, MenuItem, Restaurant
 
+from .admin import OrderItemAdmin
 from .models import (
     CardPayment,
     City,
@@ -51,6 +55,81 @@ class OrderNumberSequenceTests(TestCase):
         # Remove o último; o próximo deve seguir a partir do maior existente (OM-1).
         Order.objects.get(order_number='OM-2').delete()
         self.assertEqual(self._make_order().order_number, 'OM-2')
+
+    def test_retries_when_the_number_was_taken(self):
+        """Dois checkouts simultâneos calculam o mesmo número: o 2º tenta de novo."""
+        taken = self._make_order()  # OM-1
+        with patch(
+            'orders.models.generate_order_number', side_effect=['OM-1', 'OM-2'],
+        ) as generate:
+            order = self._make_order()
+        self.assertEqual(generate.call_count, 2)
+        self.assertEqual(order.order_number, 'OM-2')
+        self.assertNotEqual(order.pk, taken.pk)
+
+    def test_gives_up_after_the_attempt_limit(self):
+        self._make_order()  # OM-1
+        with patch('orders.models.generate_order_number', return_value='OM-1'):
+            with self.assertRaises(IntegrityError):
+                self._make_order()
+        self.assertEqual(Order.objects.count(), 1)
+
+
+class OrderTotalsTests(TestCase):
+    """Mexer nos itens depois do checkout precisa refazer o valor do pedido."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Totals Kitchen', slug='tot')
+        self.order = Order.objects.create(
+            restaurant=self.restaurant,
+            customer_name='Cliente',
+            phone='000',
+            subtotal=Decimal('20.00'),
+            delivery_fee=Decimal('5.00'),
+        )
+        self.order_item = OrderItem.objects.create(
+            order=self.order,
+            item_name='Burger',
+            unit_price=Decimal('20.00'),
+            quantity=1,
+            line_total=Decimal('20.00'),
+        )
+
+    def _admin(self):
+        return OrderItemAdmin(OrderItem, admin_site)
+
+    def test_checkout_total_is_subtotal_plus_fee(self):
+        self.assertEqual(self.order.total, Decimal('25.00'))
+
+    def test_recalculate_after_quantity_change(self):
+        self.order_item.quantity = 3
+        self.order_item.save()
+
+        self.order.recalculate_totals()
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.subtotal, Decimal('60.00'))
+        self.assertEqual(self.order.total, Decimal('65.00'))
+
+    def test_admin_edit_refreshes_the_order_total(self):
+        self.order_item.quantity = 2
+        self._admin().save_model(
+            request=None,
+            obj=self.order_item,
+            form=SimpleNamespace(initial={}),
+            change=True,
+        )
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.subtotal, Decimal('40.00'))
+        self.assertEqual(self.order.total, Decimal('45.00'))
+
+    def test_admin_delete_refreshes_the_order_total(self):
+        self._admin().delete_model(request=None, obj=self.order_item)
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.subtotal, Decimal('0.00'))
+        self.assertEqual(self.order.total, Decimal('5.00'))
 
 
 class OrderViewsTests(TestCase):

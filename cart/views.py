@@ -7,6 +7,7 @@ from django.views.decorators.http import require_POST
 from menu.models import MenuItem
 
 from .cart import Cart
+from .validators import clean_options
 
 
 def cart_detail(request):
@@ -61,12 +62,17 @@ def cart_add(request, item_id):
         messages.warning(request, f'{item.name} está indisponível no momento.')
         return redirect(_next_url(request))
 
+    options, error = clean_options(item, _parse_options(request))
+    if error:
+        messages.warning(request, error)
+        return redirect(_next_url(request))
+
     notes = request.POST.get('item_notes', '').strip()
 
     cart.add(
         item,
         quantity=_positive_int(request.POST.get('quantity'), 1),
-        options=_parse_options(request),
+        options=options,
         notes=notes,
     )
     messages.success(request, f'{item.name} foi adicionado ao carrinho.')
@@ -87,13 +93,18 @@ def cart_edit(request, line_id):
         messages.warning(request, f'{item.name} está indisponível no momento.')
         return redirect('cart:cart_detail')
 
+    options, error = clean_options(item, _parse_options(request))
+    if error:
+        messages.warning(request, error)
+        return redirect('cart:cart_detail')
+
     notes = request.POST.get('item_notes', '').strip()
 
     cart.replace(
         line_id,
         item,
         quantity=_positive_int(request.POST.get('quantity'), 1),
-        options=_parse_options(request),
+        options=options,
         notes=notes,
     )
     messages.success(request, f'{item.name} atualizado.')

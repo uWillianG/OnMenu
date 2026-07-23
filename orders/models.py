@@ -1,10 +1,13 @@
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from menu.models import MenuItem, Restaurant
+
+# Tentativas de gerar um número livre quando dois checkouts colidem.
+ORDER_NUMBER_ATTEMPTS = 5
 
 
 def generate_order_number():
@@ -295,9 +298,22 @@ class Order(models.Model):
             self.address_city, self.address_complement,
         ])
 
+    def recalculate_totals(self, save=True):
+        """Refaz subtotal/total a partir dos itens gravados.
+
+        O checkout já grava o subtotal vindo do carrinho; isto cobre as mudanças
+        posteriores nos itens (edição ou exclusão pelo admin), que de outra forma
+        deixariam o total do pedido desatualizado.
+        """
+        self.subtotal = self.items.aggregate(
+            total=models.Sum('line_total'),
+        )['total'] or Decimal('0.00')
+        self.total = self.subtotal + (self.delivery_fee or Decimal('0.00'))
+        if save:
+            self.save(update_fields=['subtotal', 'total', 'updated_at'])
+        return self.total
+
     def save(self, *args, **kwargs):
-        if not self.order_number:
-            self.order_number = generate_order_number()
         # Rebuild the display address from parts (skip legacy orders with no
         # structured fields so their existing address text isn't wiped).
         if self.fulfillment_method == self.FulfillmentMethod.DELIVERY and self.has_structured_address:
@@ -305,7 +321,22 @@ class Order(models.Model):
         self.total = (self.subtotal or Decimal('0.00')) + (
             self.delivery_fee or Decimal('0.00')
         )
-        super().save(*args, **kwargs)
+
+        if self.order_number:
+            return super().save(*args, **kwargs)
+
+        # O número é sequencial (maior + 1): dois checkouts simultâneos podem
+        # calcular o mesmo valor e esbarrar no UNIQUE. Cada tentativa roda em um
+        # savepoint próprio para não derrubar a transação do checkout.
+        for attempt in range(1, ORDER_NUMBER_ATTEMPTS + 1):
+            self.order_number = generate_order_number()
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.order_number = ''
+                if attempt == ORDER_NUMBER_ATTEMPTS:
+                    raise
 
     def __str__(self):
         return self.order_number

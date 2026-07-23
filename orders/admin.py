@@ -101,6 +101,28 @@ class OrderItemAdmin(admin.ModelAdmin):
     list_display = ('order', 'item_name', 'quantity', 'unit_price', 'line_total')
     search_fields = ('order__order_number', 'item_name')
 
+    # Mexer nos itens muda o valor do pedido: o subtotal/total precisam ser
+    # refeitos, senão o pedido continua mostrando o valor do checkout.
+    def _refresh_totals(self, *order_ids):
+        wanted = {order_id for order_id in order_ids if order_id}
+        for order in Order.objects.filter(pk__in=wanted):
+            order.recalculate_totals()
+
+    def save_model(self, request, obj, form, change):
+        previous_order_id = form.initial.get('order') if change else None
+        super().save_model(request, obj, form, change)
+        self._refresh_totals(obj.order_id, previous_order_id)
+
+    def delete_model(self, request, obj):
+        order_id = obj.order_id
+        super().delete_model(request, obj)
+        self._refresh_totals(order_id)
+
+    def delete_queryset(self, request, queryset):
+        order_ids = set(queryset.values_list('order_id', flat=True))
+        super().delete_queryset(request, queryset)
+        self._refresh_totals(*order_ids)
+
 
 @admin.register(PixPayment)
 class PixPaymentAdmin(admin.ModelAdmin):

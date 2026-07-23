@@ -5,6 +5,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from cart.cart import Cart
 from orders.selectors import get_delivery_fee_range, get_tracked_active_orders
@@ -21,11 +22,27 @@ from .models import BusinessHours, Category, ComplementGroup, MenuItem
 from .selectors import get_current_restaurant, get_open_status
 
 
+def _hero_delivery_fee(restaurant):
+    """Taxa de entrega resumida para o hero: (valor, é_a_partir_de).
+
+    Usa a menor taxa entre as áreas de entrega cadastradas; sem áreas, cai na
+    taxa fixa do restaurante.
+    """
+    fee_range = get_delivery_fee_range()
+    if fee_range:
+        low, high = fee_range
+        return low, low != high
+    return restaurant.delivery_fee, False
+
+
 def menu_list(request):
     restaurant = get_current_restaurant()
     categories = []
     featured_items = []
     open_status = {'is_open': None, 'today_hours': None, 'detail': ''}
+    delivery_fee = None
+    delivery_fee_from = False
+    whatsapp_digits = ''
     cart = Cart(request)
     cart_items = cart.items
 
@@ -47,6 +64,8 @@ def menu_list(request):
             .order_by('display_order', 'name')
         )
         open_status = get_open_status(restaurant)
+        delivery_fee, delivery_fee_from = _hero_delivery_fee(restaurant)
+        whatsapp_digits = ''.join(filter(str.isdigit, restaurant.whatsapp_number))
 
     return render(
         request,
@@ -57,6 +76,9 @@ def menu_list(request):
             'featured_items': featured_items,
             'is_open': open_status['is_open'],
             'open_status': open_status,
+            'hero_delivery_fee': delivery_fee,
+            'hero_delivery_fee_from': delivery_fee_from,
+            'whatsapp_digits': whatsapp_digits,
             'cart': cart,
             'cart_items': cart_items,
             'tracked_orders': get_tracked_active_orders(request),
@@ -137,7 +159,9 @@ def update_logo(request):
 
 def _build_week_hours(restaurant):
     """Return all 7 weekdays (existing rows or blanks) ordered Mon→Sun."""
-    today = datetime.now().weekday()
+    # localtime() respeita TIME_ZONE; datetime.now() usaria o fuso do servidor
+    # (UTC em produção) e marcaria o dia errado como "hoje".
+    today = timezone.localtime().weekday()
     existing = {h.day_of_week: h for h in restaurant.business_hours.all()}
     week = []
     for value, label in BusinessHours.DAY_CHOICES:

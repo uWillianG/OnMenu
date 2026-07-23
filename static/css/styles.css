@@ -558,6 +558,8 @@ a.notif-link:hover .notif-message { color: var(--primary); }
 /* ── Restaurant Hero ────────────────────────────────────────── */
 .restaurant-hero {
   position: relative;
+  isolation: isolate;
+  overflow: hidden;
   background: var(--surface);
   color: var(--text);
   padding: 34px 18px 28px;
@@ -565,19 +567,49 @@ a.notif-link:hover .notif-message { color: var(--primary); }
   border-bottom: 1px solid var(--border);
 }
 
+/* Véu discreto com o logo do estabelecimento (identidade sem poluir) */
+.hero-wash {
+  position: absolute;
+  z-index: -1;
+  top: -30%;
+  left: -8%;
+  right: -8%;
+  height: 260px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(58px) saturate(150%);
+  opacity: .16;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(#000, transparent 85%);
+  mask-image: linear-gradient(#000, transparent 85%);
+}
+
 .hero-inner {
   width: min(1200px, 100%);
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "identity"
+    "chips"
+    "actions";
+  gap: 16px;
+}
+
+.hero-identity {
+  grid-area: identity;
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 20px;
 }
+.restaurant-hero .hero-chips { grid-area: chips; margin-top: 0; }
 
 .hero-logo {
   flex-shrink: 0;
-  width: 88px;
-  height: 88px;
-  border-radius: 22px;
+  width: 104px;
+  height: 104px;
+  border-radius: 26px;
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
@@ -588,14 +620,28 @@ a.notif-link:hover .notif-message { color: var(--primary); }
 a.hero-logo:hover { border-color: var(--primary); box-shadow: var(--shadow-sm), 0 0 0 3px var(--primary-soft); }
 a.hero-logo:active { transform: scale(.98); }
 .hero-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+}
 
-.hero-text { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.hero-text { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.hero-status { display: flex; }
 
 .hero-inner h1 {
-  font-size: clamp(1.6rem, 4.5vw, 2.3rem);
+  font-size: clamp(1.7rem, 4.6vw, 2.4rem);
   font-weight: 800;
-  letter-spacing: -.8px;
-  line-height: 1.1;
+  letter-spacing: -.9px;
+  line-height: 1.08;
 }
 .hero-name-link {
   color: inherit;
@@ -611,14 +657,82 @@ a.hero-logo:active { transform: scale(.98); }
   color: var(--muted);
   font-size: .92rem;
   font-weight: 500;
+  transition: color .15s;
 }
+a.hero-address:hover { color: var(--primary); }
 .hero-address svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--primary); }
 
+/* Atalhos de contato do estabelecimento */
+.hero-actions {
+  grid-area: actions;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hero-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  font-size: .84rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  transition: color .15s, border-color .15s, box-shadow .15s, transform .12s;
+}
+.hero-action svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted); transition: color .15s; }
+.hero-action:hover { border-color: var(--primary); color: var(--primary); box-shadow: var(--shadow-xs); }
+.hero-action:hover svg { color: var(--primary); }
+.hero-action:active { transform: scale(.97); }
+
+.hero-action.is-primary {
+  background: var(--primary-soft);
+  border-color: #f7d4d8;
+  color: var(--primary-dark);
+}
+.hero-action.is-primary svg { color: var(--primary); }
+.hero-action.is-primary:hover { border-color: var(--primary); color: var(--primary-dark); }
+
+/* Telas largas: identidade e atalhos lado a lado, chips na linha de baixo */
+@media (min-width: 1120px) {
+  .hero-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "identity actions"
+      "chips    chips";
+    align-items: center;
+    gap: 18px 24px;
+  }
+  .hero-actions { justify-content: flex-end; }
+}
+
+@media (max-width: 760px) {
+  .hero-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    /* deixa os atalhos alcançarem a borda da tela ao rolar */
+    margin: 0 -18px;
+    padding: 2px 18px;
+  }
+  .hero-actions::-webkit-scrollbar { display: none; }
+}
+
 @media (max-width: 480px) {
-  .restaurant-hero { padding: 24px 16px 20px; }
-  .hero-inner { gap: 14px; }
-  .hero-logo { width: 62px; height: 62px; border-radius: 16px; }
-  .hero-text { gap: 8px; }
+  .restaurant-hero { padding: 22px 16px 18px; }
+  .hero-identity { gap: 14px; }
+  .hero-logo { width: 76px; height: 76px; border-radius: 20px; }
+  .hero-logo-fallback { font-size: 2rem; }
+  .hero-text { gap: 7px; }
+  .hero-address { font-size: .86rem; }
+  .hero-actions { margin: 0 -16px; padding: 2px 16px; }
+  .hero-action { padding: 8px 13px; font-size: .8rem; }
 }
 
 .hero-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }

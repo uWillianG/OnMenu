@@ -1,5 +1,6 @@
-from datetime import time
+from datetime import datetime, time, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -13,7 +14,7 @@ from .models import (
     MenuItem,
     Restaurant,
 )
-from .selectors import get_open_status
+from .selectors import get_open_status, is_restaurant_open
 
 
 class MenuViewsTests(TestCase):
@@ -636,3 +637,106 @@ class BusinessHoursTests(TestCase):
         self.assertTrue(BusinessHours.objects.get(day_of_week=3).is_closed)
         # Tuesday had no times and was not activated → stored as closed.
         self.assertTrue(BusinessHours.objects.get(day_of_week=1).is_closed)
+
+
+class OvernightBusinessHoursTests(TestCase):
+    """Turnos que viram a madrugada, ex.: 18:00 → 02:00."""
+
+    MONDAY = datetime(2026, 7, 20)  # segunda-feira
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Night Kitchen', slug='nk')
+        for day in range(7):
+            BusinessHours.objects.create(
+                restaurant=self.restaurant,
+                day_of_week=day,
+                open_time=time(18, 0),
+                close_time=time(2, 0),
+            )
+
+    def _at(self, day_offset, hour, minute=0):
+        """Congela o relógio em um momento da semana e devolve o status."""
+        moment = self.MONDAY + timedelta(days=day_offset, hours=hour, minutes=minute)
+        return patch('menu.selectors.timezone.localtime', return_value=moment)
+
+    def test_open_during_the_evening(self):
+        with self._at(0, 20):
+            status = get_open_status(self.restaurant)
+        self.assertTrue(status['is_open'])
+        self.assertEqual(status['detail'], 'Fecha às 02:00')
+
+    def test_open_after_midnight_on_previous_day_shift(self):
+        # 00:30 de terça ainda é o turno que abriu na segunda às 18:00.
+        with self._at(1, 0, 30):
+            status = get_open_status(self.restaurant)
+        self.assertTrue(status['is_open'])
+        self.assertEqual(status['detail'], 'Fecha às 02:00')
+
+    def test_closed_after_the_shift_ends(self):
+        with self._at(1, 3):
+            status = get_open_status(self.restaurant)
+        self.assertFalse(status['is_open'])
+        self.assertEqual(status['detail'], 'Abre hoje às 18:00')
+
+    def test_closed_before_opening(self):
+        with self._at(0, 10):
+            status = get_open_status(self.restaurant)
+        self.assertFalse(status['is_open'])
+        self.assertEqual(status['detail'], 'Abre hoje às 18:00')
+
+    def test_checkout_is_not_blocked_during_the_overnight_shift(self):
+        with self._at(1, 1):
+            self.assertTrue(is_restaurant_open(self.restaurant))
+
+    def test_open_after_midnight_even_when_today_is_closed(self):
+        # Terça marcada como fechada não encerra o turno que veio da segunda.
+        BusinessHours.objects.filter(day_of_week=1).update(
+            is_closed=True, open_time=None, close_time=None,
+        )
+        with self._at(1, 0, 30):
+            status = get_open_status(self.restaurant)
+        self.assertTrue(status['is_open'])
+
+        with self._at(1, 5):
+            status = get_open_status(self.restaurant)
+        self.assertFalse(status['is_open'])
+        self.assertEqual(status['detail'], 'Abre amanhã às 18:00')
+
+
+class DaytimeBusinessHoursTests(TestCase):
+    """Turno normal (não vira o dia) continua com o mesmo comportamento."""
+
+    MONDAY = datetime(2026, 7, 20)
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Day Kitchen', slug='dk')
+        BusinessHours.objects.create(
+            restaurant=self.restaurant,
+            day_of_week=0,
+            open_time=time(9, 0),
+            close_time=time(18, 0),
+        )
+
+    def _at(self, hour, minute=0):
+        moment = self.MONDAY + timedelta(hours=hour, minutes=minute)
+        return patch('menu.selectors.timezone.localtime', return_value=moment)
+
+    def test_open_inside_the_shift(self):
+        with self._at(12):
+            status = get_open_status(self.restaurant)
+        self.assertTrue(status['is_open'])
+        self.assertEqual(status['detail'], 'Fecha às 18:00')
+
+    def test_closed_after_the_shift(self):
+        with self._at(19):
+            status = get_open_status(self.restaurant)
+        self.assertFalse(status['is_open'])
+        # Só a segunda tem horário: a próxima abertura é daqui a uma semana.
+        self.assertEqual(status['detail'], 'Abre seg. às 09:00')
+
+    def test_closed_after_midnight(self):
+        # 00:30 de terça: o turno da segunda fechou às 18:00, não vira o dia.
+        moment = self.MONDAY + timedelta(days=1, minutes=30)
+        with patch('menu.selectors.timezone.localtime', return_value=moment):
+            status = get_open_status(self.restaurant)
+        self.assertIsNone(status['is_open'])
