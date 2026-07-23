@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -173,10 +173,26 @@ def _delivery_areas_data():
     }
 
 
-def confirmation(request, order_number):
+def _get_own_order(request, order_number, queryset=None):
+    """Pedido do próprio visitante (ou da equipe); 404 para qualquer outro.
+
+    Evita que os números sequenciais sirvam para enumerar os pedidos do
+    restaurante — ver ``selectors.can_view_order``.
+    """
     order = get_object_or_404(
-        Order.objects.select_related('restaurant').prefetch_related('items__options'),
+        queryset if queryset is not None else Order.objects.all(),
         order_number=order_number,
+    )
+    if not selectors.can_view_order(request, order):
+        raise Http404('Pedido não encontrado.')
+    return order
+
+
+def confirmation(request, order_number):
+    order = _get_own_order(
+        request,
+        order_number,
+        Order.objects.select_related('restaurant').prefetch_related('items__options'),
     )
     wa_url = None
     if order.restaurant.whatsapp_number:
@@ -253,6 +269,8 @@ def _pix_payload(pix, order):
 def pix_status(request, pix_id):
     """Polling do frontend: devolve o status atual da cobrança Pix."""
     pix = get_object_or_404(PixPayment.objects.select_related('order'), mp_payment_id=pix_id)
+    if not selectors.can_view_order(request, pix.order):
+        raise Http404('Cobrança não encontrada.')
 
     if pix.status == PixPayment.Status.PENDING:
         if pix.is_expired:
@@ -278,7 +296,7 @@ def pix_status(request, pix_id):
 @require_http_methods(['POST'])
 def pix_recreate(request, order_number):
     """Gera uma nova cobrança Pix para um pedido cujo Pix expirou/foi cancelado."""
-    order = get_object_or_404(Order, order_number=order_number)
+    order = _get_own_order(request, order_number)
 
     if order.payment_status == Order.PaymentStatus.PAID:
         return JsonResponse({
@@ -388,7 +406,7 @@ def _card_payload(card, order, message=''):
 @require_http_methods(['POST'])
 def card_pay(request, order_number):
     """Processa o pagamento com cartão a partir do token gerado pelo Brick."""
-    order = get_object_or_404(Order, order_number=order_number)
+    order = _get_own_order(request, order_number)
 
     # Idempotência: não cobra de novo se já houver pagamento aprovado/em análise.
     existing = getattr(order, 'card_payment', None)
@@ -443,6 +461,8 @@ def card_pay(request, order_number):
 def card_status(request, payment_id):
     """Polling/refresh do status de um pagamento com cartão."""
     card = get_object_or_404(CardPayment.objects.select_related('order'), mp_payment_id=payment_id)
+    if not selectors.can_view_order(request, card.order):
+        raise Http404('Pagamento não encontrado.')
 
     if card.status in (CardPayment.Status.PENDING, CardPayment.Status.IN_PROCESS) \
             and not settings.MERCADOPAGO_MOCK:
@@ -481,10 +501,20 @@ def card_3ds_callback(request):
 
 
 def _webhook_signature_ok(request):
-    """Valida o header x-signature do MP. Sem secret configurado, aceita (dev)."""
+    """Valida o header x-signature do Mercado Pago.
+
+    Sem secret configurado só aceita em desenvolvimento (modo mock ou DEBUG) —
+    em produção um webhook sem assinatura verificável é recusado, senão qualquer
+    um poderia marcar pedidos como pagos.
+    """
     secret = settings.MERCADOPAGO_WEBHOOK_SECRET
     if not secret:
-        return True
+        if settings.MERCADOPAGO_MOCK or settings.DEBUG:
+            return True
+        logger.error(
+            'Webhook recusado: MERCADOPAGO_WEBHOOK_SECRET não configurado em produção.'
+        )
+        return False
 
     signature = request.headers.get('x-signature', '')
     request_id = request.headers.get('x-request-id', '')
@@ -511,7 +541,7 @@ def _webhook_signature_ok(request):
 
 
 def track_order(request, order_number):
-    order = get_object_or_404(Order, order_number=order_number)
+    order = _get_own_order(request, order_number)
     if request.GET.get('json'):
         return JsonResponse({
             'status': order.status,

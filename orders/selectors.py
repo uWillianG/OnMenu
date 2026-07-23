@@ -35,6 +35,20 @@ def remember_order(request, order):
     request.session.modified = True
 
 
+def can_view_order(request, order):
+    """O pedido pertence a quem está pedindo a página?
+
+    Os números são sequenciais (OM-1, OM-2, …), então as páginas públicas de
+    pedido precisam ser restritas — senão dá para varrer os pedidos do
+    restaurante trocando o número na URL. Vale para a equipe, para o dono da
+    conta e para quem fez o pedido nesta sessão (compra sem login).
+    """
+    user = request.user
+    if user.is_authenticated and (user.is_staff or order.user_id == user.id):
+        return True
+    return order.order_number in request.session.get(SESSION_ORDERS_KEY, [])
+
+
 def get_tracked_active_orders(request):
     """Pedidos ativos a exibir na tela principal.
 

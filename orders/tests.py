@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 from decimal import Decimal
 from types import SimpleNamespace
@@ -6,7 +8,7 @@ from unittest.mock import patch
 from django.contrib.admin.sites import site as admin_site
 from django.contrib.auth.models import User
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from menu.models import Category, MenuItem, Restaurant
@@ -21,6 +23,7 @@ from .models import (
     OrderItem,
     PixPayment,
 )
+from .selectors import SESSION_ORDERS_KEY
 
 
 class OrderNumberSequenceTests(TestCase):
@@ -73,6 +76,135 @@ class OrderNumberSequenceTests(TestCase):
             with self.assertRaises(IntegrityError):
                 self._make_order()
         self.assertEqual(Order.objects.count(), 1)
+
+
+class OrderVisibilityTests(TestCase):
+    """Os números são sequenciais: as páginas de pedido não podem ser varridas."""
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Vis Kitchen', slug='vis')
+        self.order = Order.objects.create(
+            restaurant=self.restaurant,
+            customer_name='Ada Lovelace',
+            phone='555-0100',
+            subtotal=Decimal('30.00'),
+        )
+
+    def _remember_in_session(self, order_number):
+        session = self.client.session
+        session[SESSION_ORDERS_KEY] = [order_number]
+        session.save()
+
+    def test_stranger_gets_404_on_confirmation(self):
+        response = self.client.get(
+            reverse('orders:confirmation', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_stranger_gets_404_on_tracking(self):
+        response = self.client.get(
+            reverse('orders:track_order', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_session_owner_sees_the_order(self):
+        self._remember_in_session(self.order.order_number)
+        response = self.client.get(
+            reverse('orders:confirmation', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_account_owner_sees_the_order(self):
+        user = User.objects.create_user(username='ada', password='pw')
+        self.order.user = user
+        self.order.save(update_fields=['user'])
+
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse('orders:track_order', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_logged_in_customer_cannot_see_someone_elses_order(self):
+        other = User.objects.create_user(username='bob', password='pw')
+        self.client.force_login(other)
+        response = self.client.get(
+            reverse('orders:confirmation', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_staff_sees_any_order(self):
+        staff = User.objects.create_user(username='chef', password='pw', is_staff=True)
+        self.client.force_login(staff)
+        response = self.client.get(
+            reverse('orders:confirmation', args=[self.order.order_number]),
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_checkout_keeps_access_to_the_new_order(self):
+        """O fluxo normal continua funcionando: o checkout guarda o pedido na sessão."""
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+        self.client.post(reverse('cart:cart_add', args=[item.pk]), {'quantity': 1})
+        response = self.client.post(
+            reverse('orders:checkout'),
+            {
+                'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+                'customer_name': 'Ada Lovelace',
+                'phone': '555-0100',
+                'payment_method': Order.PaymentMethod.CASH,
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+
+@override_settings(
+    DEBUG=False,
+    MERCADOPAGO_MOCK=False,
+    MERCADOPAGO_ACCESS_TOKEN='token-de-producao',
+)
+class WebhookSignatureTests(TestCase):
+    """Em produção o webhook exige assinatura verificável."""
+
+    def _post(self):
+        return self.client.post(
+            reverse('orders:webhook_pix'),
+            data=json.dumps({'type': 'payment', 'data': {'id': '123'}}),
+            content_type='application/json',
+        )
+
+    @override_settings(MERCADOPAGO_WEBHOOK_SECRET='')
+    def test_rejected_without_secret_configured(self):
+        with self.assertLogs('orders.views', level='ERROR') as logs:
+            self.assertEqual(self._post().status_code, 401)
+        self.assertIn('MERCADOPAGO_WEBHOOK_SECRET', logs.output[0])
+
+    @override_settings(MERCADOPAGO_WEBHOOK_SECRET='segredo')
+    def test_rejected_with_wrong_signature(self):
+        self.assertEqual(self._post().status_code, 401)
+
+    @override_settings(MERCADOPAGO_WEBHOOK_SECRET='segredo')
+    @patch('orders.services.mercadopago.buscar_status')
+    def test_accepted_with_valid_signature(self, mock_status):
+        mock_status.return_value = {'id': '123', 'status': 'approved', 'external_reference': 'OM-1'}
+        ts = '1700000000'
+        request_id = 'req-1'
+        manifest = f'id:123;request-id:{request_id};ts:{ts};'
+        v1 = hmac.new(b'segredo', manifest.encode(), hashlib.sha256).hexdigest()
+
+        response = self.client.post(
+            reverse('orders:webhook_pix'),
+            data=json.dumps({'type': 'payment', 'data': {'id': '123'}}),
+            content_type='application/json',
+            headers={'x-signature': f'ts={ts},v1={v1}', 'x-request-id': request_id},
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class OrderTotalsTests(TestCase):

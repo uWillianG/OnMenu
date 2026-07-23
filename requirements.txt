@@ -3,3 +3,10 @@ Pillow>=10.0
 mercadopago>=2.2
 requests>=2.31
 python-dotenv>=1.0
+whitenoise>=6.6
+dj-database-url>=2.1
+
+# Produção com Postgres (DATABASE_URL=postgres://...):
+# psycopg[binary]>=3.1
+# Servidor WSGI (Linux):
+# gunicorn>=21.2
