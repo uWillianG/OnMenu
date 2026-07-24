@@ -1,11 +1,19 @@
+import io
+import os
+import tempfile
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
+from . import imaging
 from .models import (
     BusinessHours,
     Category,
@@ -740,3 +748,157 @@ class DaytimeBusinessHoursTests(TestCase):
         with patch('menu.selectors.timezone.localtime', return_value=moment):
             status = get_open_status(self.restaurant)
         self.assertIsNone(status['is_open'])
+
+
+def _stored_image(field_file):
+    """Abre a imagem gravada a partir dos bytes, sem deixar o arquivo aberto.
+
+    No Windows um handle pendurado impede a remoção do diretório temporário no
+    fim do teste.
+    """
+    with field_file.open('rb') as handle:
+        data = handle.read()
+    field_file.close()
+    return Image.open(io.BytesIO(data))
+
+
+class ImageCompressionTests(TestCase):
+    """As fotos entram reduzidas: quem paga o peso é o cliente no 4G.
+
+    As imagens de teste são ruído aleatório de propósito — uma imagem de cor
+    sólida comprimiria a quase nada e o teste passaria sem provar nada.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        media = override_settings(MEDIA_ROOT=self.tmp.name)
+        media.enable()
+        self.addCleanup(media.disable)
+
+        self.restaurant = Restaurant.objects.create(name='Foto Kitchen', slug='foto')
+        self.category = Category.objects.create(
+            restaurant=self.restaurant, name='Lanches', slug='lanches',
+        )
+
+    def _upload(self, size=(1200, 900), fmt='JPEG', name='foto.jpg'):
+        image = Image.frombytes('RGB', size, os.urandom(size[0] * size[1] * 3))
+        buffer = io.BytesIO()
+        image.save(buffer, fmt, quality=95)
+        return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
+
+    def _item(self, upload):
+        return MenuItem.objects.create(
+            category=self.category, name='Burger', price=Decimal('20.00'),
+            image=upload,
+        )
+
+    def test_large_photo_is_resized_on_upload(self):
+        upload = self._upload(size=(1200, 900))
+        original_bytes = upload.size
+
+        item = self._item(upload)
+
+        with _stored_image(item.image) as stored:
+            self.assertLessEqual(max(stored.size), max(imaging.MENU_PHOTO_SIZE))
+            self.assertEqual(stored.size, (1000, 750))   # proporção preservada
+        self.assertLess(item.image.size, original_bytes)
+
+    def test_logo_uses_a_tighter_cap_than_menu_photos(self):
+        """O logo aparece a 80px na tela; guardar 1000px é desperdício puro."""
+        self.restaurant.logo = self._upload(size=(1000, 1000), name='logo.jpg')
+        self.restaurant.save()
+
+        with _stored_image(self.restaurant.logo) as stored:
+            self.assertLessEqual(max(stored.size), max(imaging.LOGO_SIZE))
+
+    def test_small_file_is_left_alone(self):
+        """Abaixo do limiar o reprocessamento não paga o próprio custo."""
+        buffer = io.BytesIO()
+        Image.new('RGB', (40, 40), 'red').save(buffer, 'JPEG')
+        buffer.seek(0)
+        self.assertIsNone(imaging.compress(buffer))
+
+    def test_unreadable_file_does_not_raise(self):
+        """Imagem é acessório: um arquivo corrompido não pode derrubar o cadastro."""
+        garbage = io.BytesIO(os.urandom(imaging.MIN_BYTES + 1000))
+        with self.assertLogs('menu.imaging', level='WARNING'):
+            self.assertIsNone(imaging.compress(garbage))
+
+    def test_already_optimized_image_is_not_reprocessed(self):
+        upload = self._upload(size=(1200, 900))
+        item = self._item(upload)
+        first_size = item.image.size
+
+        # Salvar de novo (mudando outro campo) não pode reabrir nem regravar a
+        # foto que já está no disco.
+        item.name = 'Burger Duplo'
+        item.save()
+
+        item.refresh_from_db()
+        self.assertEqual(item.image.size, first_size)
+
+    def test_compress_preserves_the_original_format(self):
+        """Trocar de formato obrigaria a mexer na extensão do arquivo."""
+        image = Image.frombytes('RGB', (900, 700), os.urandom(900 * 700 * 3))
+        buffer = io.BytesIO()
+        image.save(buffer, 'PNG')
+        buffer.seek(0)
+
+        compressed = imaging.compress(buffer, max_size=(400, 400))
+        self.assertIsNotNone(compressed)
+        with Image.open(compressed) as result:
+            self.assertEqual(result.format, 'PNG')
+
+
+class CompressImagesCommandTests(TestCase):
+    """Comando que trata o acervo já gravado, não só os uploads novos."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        media = override_settings(MEDIA_ROOT=self.tmp.name)
+        media.enable()
+        self.addCleanup(media.disable)
+
+        self.restaurant = Restaurant.objects.create(name='Acervo', slug='acervo')
+        self.category = Category.objects.create(
+            restaurant=self.restaurant, name='Lanches', slug='lanches',
+        )
+
+    def _item_with_untouched_photo(self):
+        """Cria um item cuja foto foi gravada sem passar pela compressão."""
+        image = Image.frombytes('RGB', (1600, 1200), os.urandom(1600 * 1200 * 3))
+        buffer = io.BytesIO()
+        image.save(buffer, 'JPEG', quality=95)
+
+        item = MenuItem.objects.create(
+            category=self.category, name='Burger', price=Decimal('20.00'),
+        )
+        item.image.save('grande.jpg', ContentFile(buffer.getvalue()), save=True)
+        return item
+
+    def test_dry_run_reports_without_writing(self):
+        item = self._item_with_untouched_photo()
+        before = item.image.size
+
+        out = io.StringIO()
+        call_command('compress_images', '--dry-run', stdout=out)
+
+        item.refresh_from_db()
+        self.assertEqual(item.image.size, before)
+        self.assertIn('simulação', out.getvalue())
+
+    def test_command_shrinks_stored_images_in_place(self):
+        item = self._item_with_untouched_photo()
+        before = item.image.size
+        name_before = item.image.name
+
+        call_command('compress_images', stdout=io.StringIO())
+
+        item.refresh_from_db()
+        # O nome não muda: URLs já compartilhadas continuam válidas.
+        self.assertEqual(item.image.name, name_before)
+        self.assertLess(item.image.size, before)
+        with _stored_image(item.image) as stored:
+            self.assertLessEqual(max(stored.size), max(imaging.MENU_PHOTO_SIZE))

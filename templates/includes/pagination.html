@@ -1,0 +1,29 @@
+{% if page.paginator.num_pages > 1 %}
+  <nav class="pager" aria-label="{{ pager_label|default:'Páginas' }}">
+    {% if page.has_previous %}
+      <a class="pager-btn" href="{% querystring page=page.previous_page_number %}" rel="prev">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Anteriores
+      </a>
+    {% else %}
+      <span class="pager-btn is-disabled" aria-disabled="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Anteriores
+      </span>
+    {% endif %}
+
+    <span class="pager-status">{{ page.number }} de {{ page.paginator.num_pages }}</span>
+
+    {% if page.has_next %}
+      <a class="pager-btn" href="{% querystring page=page.next_page_number %}" rel="next">
+        Próximos
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    {% else %}
+      <span class="pager-btn is-disabled" aria-disabled="true">
+        Próximos
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </span>
+    {% endif %}
+  </nav>
+{% endif %}

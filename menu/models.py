@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.db import models
 from django.utils.text import slugify
 
+from .imaging import LOGO_SIZE, MENU_PHOTO_SIZE, compress_pending_upload
+
 
 class Restaurant(models.Model):
     name = models.CharField(max_length=120)
@@ -53,6 +55,7 @@ class Restaurant(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)[:140] or 'restaurant'
+        compress_pending_upload(self.logo, max_size=LOGO_SIZE)
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -154,6 +157,7 @@ class MenuItem(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)[:140] or 'menu-item'
+        compress_pending_upload(self.image, max_size=MENU_PHOTO_SIZE)
         super().save(*args, **kwargs)
 
     def __str__(self):

@@ -1,0 +1,117 @@
+<div class="confirm-modal" id="confirm-modal" hidden>
+  <div class="confirm-modal-backdrop" data-confirm-close></div>
+  <div class="confirm-modal-panel" role="alertdialog" aria-modal="true"
+       aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-text">
+    <span class="confirm-modal-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </span>
+    <h3 class="confirm-modal-title" id="confirm-modal-title"></h3>
+    <p class="confirm-modal-text" id="confirm-modal-text"></p>
+    <p class="confirm-modal-sub" id="confirm-modal-sub" hidden></p>
+    <div class="confirm-modal-actions">
+      <button type="button" class="btn-secondary" id="confirm-modal-cancel" data-confirm-close>Cancelar</button>
+      <button type="button" class="btn-primary" id="confirm-modal-ok">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Confirmação dentro do sistema, no lugar do confirm() nativo do navegador.
+   Um formulário entra neste fluxo declarando os atributos abaixo — apenas
+   data-confirm é obrigatório:
+
+     data-confirm        texto principal, a consequência da ação
+     data-confirm-title  título do diálogo
+     data-confirm-sub    registro afetado, exibido em destaque
+     data-confirm-ok     rótulo do botão que conclui
+     data-confirm-tone   "danger" quando a ação for destrutiva
+
+   Inclua este arquivo uma única vez por página. */
+(function () {
+  var modal  = document.getElementById('confirm-modal');
+  var panel  = modal && modal.querySelector('.confirm-modal-panel');
+  var title  = document.getElementById('confirm-modal-title');
+  var text   = document.getElementById('confirm-modal-text');
+  var sub    = document.getElementById('confirm-modal-sub');
+  var okBtn  = document.getElementById('confirm-modal-ok');
+  var cancel = document.getElementById('confirm-modal-cancel');
+  if (!modal) return;
+
+  var pending = null;      // formulário aguardando confirmação
+  var submitter = null;    // botão que disparou o envio (preserva name/value)
+  var lastFocus = null;    // para devolver o foco ao fechar
+
+  function open(form, trigger) {
+    var d = form.dataset;
+    pending = form;
+    submitter = trigger;
+    lastFocus = trigger || document.activeElement;
+
+    title.textContent = d.confirmTitle || 'Confirmar';
+    text.textContent = d.confirm || 'Deseja continuar?';
+    sub.textContent = d.confirmSub || '';
+    sub.hidden = !d.confirmSub;
+
+    var danger = d.confirmTone === 'danger';
+    panel.classList.toggle('is-danger', danger);
+    okBtn.className = danger ? 'btn-primary btn-danger' : 'btn-primary';
+    okBtn.textContent = d.confirmOk || 'Confirmar';
+    okBtn.disabled = false;
+
+    modal.hidden = false;
+    document.body.classList.add('no-scroll');
+    // Numa ação destrutiva o foco começa na saída segura.
+    cancel.focus();
+  }
+
+  function close() {
+    modal.hidden = true;
+    document.body.classList.remove('no-scroll');
+    pending = null;
+    submitter = null;
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (form.dataset.confirmed === '1') return;   // já confirmado: segue o envio
+      e.preventDefault();
+      open(form, e.submitter);
+    });
+  });
+
+  okBtn.addEventListener('click', function () {
+    if (!pending) return;
+    var form = pending, trigger = submitter;
+    okBtn.disabled = true;                          // evita envio duplicado
+    form.dataset.confirmed = '1';
+    modal.hidden = true;
+    document.body.classList.remove('no-scroll');
+    pending = null;
+    submitter = null;
+    if (form.requestSubmit) form.requestSubmit(trigger || undefined);
+    else form.submit();
+  });
+
+  modal.querySelectorAll('[data-confirm-close]').forEach(function (el) {
+    el.addEventListener('click', close);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) close();
+  });
+
+  // Mantém o foco dentro do diálogo enquanto ele estiver aberto.
+  modal.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var focusable = [cancel, okBtn];
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+})();
+</script>

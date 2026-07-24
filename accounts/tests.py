@@ -1,10 +1,17 @@
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.views import GOOGLE_NEXT_SESSION_KEY, GOOGLE_STATE_SESSION_KEY
+from accounts.views import (
+    GOOGLE_NEXT_SESSION_KEY,
+    GOOGLE_STATE_SESSION_KEY,
+    ORDER_HISTORY_PAGE_SIZE,
+)
+from menu.models import Restaurant
+from orders.models import Order
 
 GOOGLE_ENABLED = override_settings(
     GOOGLE_OAUTH_CLIENT_ID='client-id',
@@ -681,3 +688,48 @@ class AddressTests(TestCase):
             reverse('cart:cart_add', args=[item.id]),
             {'quantity': 1},
         )
+
+
+class OrderHistoryPaginationTests(TestCase):
+    """O histórico traz itens e complementos de cada pedido: precisa de recorte."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='cliente', password='pw')
+        self.client.force_login(self.user)
+        self.restaurant = Restaurant.objects.create(name='Histórico', slug='hist')
+        self.page_size = ORDER_HISTORY_PAGE_SIZE
+
+    def _make_orders(self, count):
+        for index in range(count):
+            Order.objects.create(
+                restaurant=self.restaurant, user=self.user,
+                customer_name=f'Cliente {index}', phone='555-0000',
+                subtotal=Decimal('10.00'), total=Decimal('10.00'),
+            )
+
+    def test_history_is_paginated(self):
+        self._make_orders(self.page_size + 3)
+        response = self.client.get(reverse('accounts:order_history'))
+        self.assertEqual(len(response.context['orders']), self.page_size)
+        self.assertEqual(response.context['page'].paginator.num_pages, 2)
+
+    def test_second_page_returns_the_remainder(self):
+        self._make_orders(self.page_size + 3)
+        response = self.client.get(reverse('accounts:order_history'), {'page': 2})
+        self.assertEqual(len(response.context['orders']), 3)
+
+    def test_pagination_neither_repeats_nor_skips_orders(self):
+        total = self.page_size + 3
+        self._make_orders(total)
+        url = reverse('accounts:order_history')
+
+        first = self.client.get(url).context['orders']
+        second = self.client.get(url, {'page': 2}).context['orders']
+
+        numbers = [o.order_number for o in first] + [o.order_number for o in second]
+        self.assertEqual(len(set(numbers)), total)
+
+    def test_single_page_hides_the_pager(self):
+        self._make_orders(2)
+        response = self.client.get(reverse('accounts:order_history'))
+        self.assertNotContains(response, 'class="pager"')

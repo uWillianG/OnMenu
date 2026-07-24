@@ -69,6 +69,9 @@
         <div class="order-cards" id="cards-finished">
           {% include 'orders/_staff_order_cards.html' with orders=inactive_orders empty_title='Nenhum pedido finalizado' empty_text='Pedidos entregues ou cancelados aparecem aqui.' %}
         </div>
+        <div id="pager-finished">
+          {% include 'includes/pagination.html' with page=finished_page pager_label='Páginas de pedidos finalizados' %}
+        </div>
       </section>
 
       <div class="bulk-bar" id="bulk-bar" role="region" aria-label="Ações em lote">
@@ -258,6 +261,7 @@
     var POLL_MS      = 12000;
     var activeWrap   = document.getElementById('cards-active');
     var finishedWrap = document.getElementById('cards-finished');
+    var pagerWrap    = document.getElementById('pager-finished');
     var countActive  = document.getElementById('count-active');
     var countFinished = document.getElementById('count-finished');
     if (!activeWrap || !finishedWrap) return;
@@ -279,6 +283,7 @@
 
       activeWrap.innerHTML = data.active_html;
       finishedWrap.innerHTML = data.inactive_html;
+      if (pagerWrap && typeof data.pager_html === 'string') pagerWrap.innerHTML = data.pager_html;
       if (countActive)  countActive.textContent  = data.active_count;
       if (countFinished) countFinished.textContent = data.inactive_count;
 

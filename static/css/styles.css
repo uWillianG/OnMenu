@@ -1751,14 +1751,15 @@ a.hero-chip-action:hover { color: var(--primary); border-color: var(--primary); 
 .back-link:hover svg { transform: translateX(-3px); }
 .back-link:active { transform: scale(.98); }
 
+/* Modificador destrutivo, aplicado sobre .btn-primary. */
 .btn-danger {
-  background: #fff0f2;
-  color: var(--warning);
-  border: 1.5px solid #fbd0d8;
-  box-shadow: none;
+  background: var(--warning);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(225, 29, 72, .24);
 }
 
-.btn-danger:hover { background: #fbd0d8; transform: none; filter: none; }
+.btn-danger:hover { filter: brightness(1.06); }
 
 /* ── Cart Detail / generic page ─────────────────────────────── */
 .page-content {
@@ -2797,6 +2798,53 @@ body.has-bulk-bar { padding-bottom: 96px; }
 
 .order-cards { display: grid; gap: 12px; }
 
+/* ── Paginação dos pedidos finalizados ──────────────────────── */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.pager-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: .88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .15s, color .15s;
+}
+.pager-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.pager-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.pager-btn.is-disabled {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--muted);
+  opacity: .55;
+  pointer-events: none;
+}
+
+.pager-status {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  /* Em tela estreita o rótulo sai e ficam só as setas + a posição. */
+  .pager-btn { padding: 9px 12px; font-size: 0; gap: 0; }
+  .pager-btn svg { width: 17px; height: 17px; }
+}
+
 .order-card {
   display: flex;
   align-items: flex-start;
@@ -3543,35 +3591,115 @@ body.has-bulk-bar { padding-bottom: 96px; }
 .confirm-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(20, 24, 33, .55);
-  backdrop-filter: blur(2px);
+  background: rgba(20, 24, 33, .5);
+  backdrop-filter: blur(3px);
+  animation: modalFadeIn .18s ease;
 }
 
 .confirm-modal-panel {
   position: relative;
-  width: min(92vw, 380px);
+  width: min(92vw, 400px);
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  padding: 26px 24px;
+  padding: 30px 26px 26px;
   display: grid;
-  gap: 8px;
+  gap: 0;
   text-align: center;
   animation: modalScaleIn .2s ease;
 }
 
-.confirm-modal-title { font-size: 1.2rem; font-weight: 800; color: var(--text); }
-.confirm-modal-text { font-size: .95rem; color: var(--text); }
-.confirm-modal-sub { font-size: .85rem; color: var(--muted); font-weight: 700; }
+.confirm-modal-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -.4px;
+  color: var(--text);
+  margin: 0;
+}
+/* O respiro só existe quando o diálogo tem selo (há modais sem ele). */
+.confirm-modal-icon + .confirm-modal-title { margin-top: 16px; }
 
+/* O título carrega a decisão; o corpo só explica a consequência. */
+.confirm-modal-text {
+  font-size: .94rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 7px 0 0;
+}
+
+/* O registro afetado é o dado mais importante do diálogo: ganha cartão próprio.
+   Preenchido e sem borda, para não ser confundido com os botões abaixo. */
+.confirm-modal-sub {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--text);
+  overflow-wrap: anywhere;   /* nomes longos não estouram o cartão */
+}
+.confirm-modal-sub[hidden] { display: none; }
+
+/* Selo do topo, com halo suave: neutro por padrão, vermelho quando destrutivo. */
+.confirm-modal-icon {
+  justify-self: center;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--muted);
+  box-shadow: 0 0 0 8px var(--bg);
+}
+.confirm-modal-icon svg { width: 25px; height: 25px; }
+.confirm-modal-panel.is-danger .confirm-modal-icon {
+  background: var(--primary-soft);
+  color: var(--primary);
+  box-shadow: 0 0 0 8px rgba(225, 20, 40, .05);
+}
+
+/* Sair fica compacto; a ação que conclui ocupa o resto da linha. */
 .confirm-modal-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   gap: 10px;
-  justify-content: center;
-  margin-top: 14px;
+  margin-top: 24px;
 }
 .confirm-modal-actions .btn-primary,
-.confirm-modal-actions .btn-secondary { padding: 11px 22px; }
+.confirm-modal-actions .btn-secondary {
+  width: 100%;
+  padding: 13px 18px;
+  font-size: .95rem;
+  border: 1.5px solid transparent;   /* alinha a altura dos dois botões */
+}
+/* Cancelar recua para que a ação destrutiva seja o foco visual do diálogo —
+   contornado, não preenchido, para não competir com o cartão do registro. */
+.confirm-modal-actions .btn-secondary {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+.confirm-modal-actions .btn-secondary:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+/* O diálogo abre com o foco no botão seguro: o anel precisa ser o da casa. */
+.confirm-modal-actions button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 400px) {
+  .confirm-modal-panel { padding: 26px 20px 22px; }
+  /* Empilhado, a ação que conclui vem primeiro, como nas folhas nativas.
+     Ela é sempre o último item — às vezes um <form>, não o próprio botão. */
+  .confirm-modal-actions { grid-template-columns: 1fr; gap: 8px; }
+  .confirm-modal-actions > :last-child { order: -1; }
+}
 
 @media (min-width: 900px) {
   .profile-layout { grid-template-columns: 380px 1fr; }

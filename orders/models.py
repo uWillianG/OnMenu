@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from django.conf import settings
@@ -9,6 +10,13 @@ from menu.models import MenuItem, Restaurant
 # Tentativas de gerar um número livre quando dois checkouts colidem.
 ORDER_NUMBER_ATTEMPTS = 5
 
+SEQUENTIAL_NUMBER_RE = re.compile(r'^OM-(\d+)$')
+
+# Quantos pedidos recentes olhamos para achar o último número sequencial.
+# Como todo pedido novo entra no formato ``OM-<n>``, o primeiro já resolve; a
+# margem só cobre uma base em transição, com pedidos no formato antigo no meio.
+ORDER_NUMBER_LOOKBACK = 50
+
 
 def generate_order_number():
     """Número sequencial do pedido: OM-1, OM-2, OM-3, …
@@ -17,21 +25,21 @@ def generate_order_number():
     formato ``OM-AAAAMMDD-XXXXXX`` são ignorados, então a sequência recomeça do 1.
     Deve ser chamada dentro da transação que cria o pedido (checkout já é
     ``@transaction.atomic``); a constraint UNIQUE protege contra colisões.
+
+    Olha só os últimos ``ORDER_NUMBER_LOOKBACK`` pedidos pela chave primária.
+    Filtrar por expressão regular obrigaria o banco a varrer a tabela inteira a
+    cada checkout — dentro da transação, no pior momento possível.
     """
-    last = (
+    recent = (
         Order.objects
-        .filter(order_number__regex=r'^OM-\d+$')
         .order_by('-id')
-        .values_list('order_number', flat=True)
-        .first()
+        .values_list('order_number', flat=True)[:ORDER_NUMBER_LOOKBACK]
     )
-    last_number = 0
-    if last:
-        try:
-            last_number = int(last.rsplit('-', 1)[1])
-        except (IndexError, ValueError):
-            last_number = 0
-    return f'OM-{last_number + 1}'
+    for number in recent:
+        match = SEQUENTIAL_NUMBER_RE.match(number or '')
+        if match:
+            return f'OM-{int(match.group(1)) + 1}'
+    return 'OM-1'
 
 
 class City(models.Model):
@@ -192,6 +200,14 @@ class Order(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # A tabela de pedidos só cresce. Sem estes índices, o painel (filtra por
+        # situação), os relatórios (varrem faixas de data) e o histórico do
+        # cliente (filtra por conta) viram varredura completa com o tempo.
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='order_status_created_idx'),
+            models.Index(fields=['-created_at'], name='order_created_idx'),
+            models.Index(fields=['user', '-created_at'], name='order_user_created_idx'),
+        ]
 
     def _compose_address(self):
         line1 = ', '.join(p for p in [self.address_street, self.address_number] if p)

@@ -1,6 +1,6 @@
 """Consultas auxiliares de pedidos para a interface do cliente."""
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Avg, Count, Q, Sum
@@ -8,6 +8,21 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from .models import Neighborhood, Order, OrderItem
+
+
+def local_day_bounds(start, end=None):
+    """Converte um intervalo de datas locais no par de datetimes que o cobre.
+
+    ``created_at__date`` aplica uma função sobre a coluna e impede o banco de
+    usar o índice de ``created_at``; comparar o datetime direto o mantém em jogo.
+    Com ``end`` omitido devolve os limites de um único dia.
+    """
+    tz = timezone.get_current_timezone()
+    if end is None:
+        end = start
+    first = timezone.make_aware(datetime.combine(start, time.min), tz)
+    last = timezone.make_aware(datetime.combine(end, time.max), tz)
+    return first, last
 
 
 def get_delivery_fee_range():
@@ -67,9 +82,10 @@ def get_sales_report(start, end):
     Pedidos cancelados ficam de fora: não viraram receita. Pagamentos ainda
     pendentes (dinheiro, cartão na entrega) contam, porque o pedido foi feito.
     """
+    first, last = local_day_bounds(start, end)
     orders = Order.objects.filter(
-        created_at__date__gte=start,
-        created_at__date__lte=end,
+        created_at__gte=first,
+        created_at__lte=last,
     ).exclude(status=Order.Status.CANCELLED)
 
     totals = orders.aggregate(
@@ -83,8 +99,8 @@ def get_sales_report(start, end):
     order_count = totals['order_count'] or 0
 
     cancelled_count = Order.objects.filter(
-        created_at__date__gte=start,
-        created_at__date__lte=end,
+        created_at__gte=first,
+        created_at__lte=last,
         status=Order.Status.CANCELLED,
     ).count()
 

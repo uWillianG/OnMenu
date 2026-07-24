@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -601,15 +602,23 @@ def notifications_feed(request):
     return JsonResponse({'ok': True, 'count': unread, 'latest_id': latest_id})
 
 
-def _staff_orders_signature(active_orders, inactive_orders):
+# Pedidos finalizados por página. Os ativos não paginam: são a fila de trabalho
+# da cozinha e precisam estar todos à vista — e são poucos por natureza.
+STAFF_FINISHED_PAGE_SIZE = 20
+
+
+def _staff_orders_signature(active_orders, inactive_orders, finished_total):
     """Assinatura leve do estado atual do painel.
 
     Muda quando um pedido novo chega, quando um status muda ou quando um pedido
     passa de ativo para finalizado — é o que o polling usa para decidir se a
-    lista precisa ser atualizada em tela.
+    lista precisa ser atualizada em tela. Cobre só o que está em tela; o total
+    de finalizados entra para que uma mudança fora da página atual (que altera a
+    contagem) também dispare a atualização.
     """
     parts = [f'{o.order_number}:{o.status}' for o in active_orders + inactive_orders]
     parts.sort()
+    parts.append(f'total:{finished_total}')
     return hashlib.md5('|'.join(parts).encode()).hexdigest()
 
 
@@ -639,21 +648,30 @@ def _staff_orders_context(request):
 
     parsed_date = parse_date(date_filter) if date_filter else None
     if parsed_date:
-        orders = orders.filter(created_at__date=parsed_date)
+        first, last = selectors.local_day_bounds(parsed_date)
+        orders = orders.filter(created_at__gte=first, created_at__lte=last)
     else:
         date_filter = ''
 
-    # Separa pedidos em andamento (ativos) dos finalizados (entregues/cancelados),
-    # avaliando em Python para não fazer duas queries adicionais.
-    order_list = list(orders)
-    active_orders = [o for o in order_list if o.is_active]
-    inactive_orders = [o for o in order_list if not o.is_active]
+    # Duas consultas indexadas em vez de carregar a tabela inteira e separar em
+    # Python: a lista de finalizados cresce para sempre, e este mesmo caminho é
+    # percorrido pelo polling do painel a cada poucos segundos.
+    active_orders = list(orders.filter(status__in=Order.ACTIVE_STATUSES))
+    finished_page = Paginator(
+        # created_at não é único; o id desempata para a paginação não repetir
+        # nem pular pedidos criados no mesmo instante.
+        orders.exclude(status__in=Order.ACTIVE_STATUSES).order_by('-created_at', '-id'),
+        STAFF_FINISHED_PAGE_SIZE,
+    ).get_page(request.GET.get('page'))
+    inactive_orders = list(finished_page)
+    finished_total = finished_page.paginator.count
 
     return {
         'active_orders': active_orders,
         'inactive_orders': inactive_orders,
         'active_count': len(active_orders),
-        'inactive_count': len(inactive_orders),
+        'inactive_count': finished_total,
+        'finished_page': finished_page,
         'status_filter': status_filter,
         'payment_filter': payment_filter,
         'fulfillment_filter': fulfillment_filter,
@@ -665,7 +683,9 @@ def _staff_orders_context(request):
         'bulk_status_choices': Order.bulk_status_choices(),
         'payment_choices': Order.PaymentMethod.choices,
         'fulfillment_choices': Order.FulfillmentMethod.choices,
-        'orders_signature': _staff_orders_signature(active_orders, inactive_orders),
+        'orders_signature': _staff_orders_signature(
+            active_orders, inactive_orders, finished_total,
+        ),
     }
 
 
@@ -722,6 +742,16 @@ def staff_orders_feed(request):
         },
         request=request,
     )
+    # O paginador acompanha os cartões: sem isto o polling deixaria em tela
+    # controles apontando para uma quantidade de páginas que já mudou.
+    pager_html = render_to_string(
+        'includes/pagination.html',
+        {
+            'page': ctx['finished_page'],
+            'pager_label': 'Páginas de pedidos finalizados',
+        },
+        request=request,
+    )
     return JsonResponse({
         'ok': True,
         'signature': ctx['orders_signature'],
@@ -729,6 +759,7 @@ def staff_orders_feed(request):
         'inactive_count': ctx['inactive_count'],
         'active_html': active_html,
         'inactive_html': inactive_html,
+        'pager_html': pager_html,
     })
 
 

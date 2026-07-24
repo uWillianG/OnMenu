@@ -115,6 +115,21 @@ preenchido e o SMTP configurado, também por e-mail.
 Sem os dois primeiros, um pagamento aprovado fora do webhook fica preso em
 "pendente". Use o Agendador de Tarefas do Windows ou cron.
 
+### 8. Peso das imagens
+
+As fotos enviadas pelo painel são redimensionadas e recomprimidas no upload
+(1000px para item, 320px para o logo) — é o cliente no celular que paga o peso
+do cardápio. Para tratar as imagens que já estavam no disco antes disso, rode
+uma vez após o deploy:
+
+```bash
+python manage.py compress_images --dry-run   # mostra o que faria
+python manage.py compress_images
+```
+
+O comando grava por cima do mesmo nome de arquivo, então nenhuma URL já
+compartilhada quebra.
+
 ### 8. Webhooks do Mercado Pago
 
 Cadastre no painel do Mercado Pago (Suas integrações → Webhooks):

@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 import json
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -15,8 +15,10 @@ from django.utils import timezone
 
 from menu.models import Category, MenuItem, Restaurant
 
+from . import models, selectors, views
 from .admin import OrderItemAdmin
 from .models import (
+    generate_order_number,
     CardPayment,
     City,
     Neighborhood,
@@ -78,6 +80,33 @@ class OrderNumberSequenceTests(TestCase):
             with self.assertRaises(IntegrityError):
                 self._make_order()
         self.assertEqual(Order.objects.count(), 1)
+
+    def test_number_is_found_in_a_single_query(self):
+        """Antes era um filtro por regex — varredura da tabela a cada checkout."""
+        for _ in range(5):
+            self._make_order()
+        with self.assertNumQueries(1):
+            self.assertEqual(generate_order_number(), 'OM-6')
+
+    def test_sequence_survives_a_legacy_order_on_top(self):
+        """Pedido no formato antigo mais recente não zera a sequência."""
+        self._make_order()  # OM-1
+        self._make_order()  # OM-2
+        Order.objects.create(
+            restaurant=self.restaurant, customer_name='Antigo', phone='000',
+            order_number='OM-20250101-ABC123',
+        )
+        self.assertEqual(self._make_order().order_number, 'OM-3')
+
+    def test_lookback_window_is_wide_enough_for_a_transition(self):
+        """A janela cobre uma base em transição, com formatos misturados."""
+        self._make_order()  # OM-1
+        for index in range(models.ORDER_NUMBER_LOOKBACK - 2):
+            Order.objects.create(
+                restaurant=self.restaurant, customer_name='Antigo', phone='000',
+                order_number=f'OM-20250101-{index:06d}',
+            )
+        self.assertEqual(self._make_order().order_number, 'OM-2')
 
 
 class OrderVisibilityTests(TestCase):
@@ -1430,3 +1459,149 @@ class StaffOrderPrintTests(TestCase):
         self.assertIn(base + '?tipo=completa', html)
         self.assertIn(base + '?tipo=cozinha', html)
         self.assertIn(base + '?tipo=entregador', html)
+
+
+class StaffOrdersPaginationTests(TestCase):
+    """O painel não pode carregar a tabela inteira: ela só cresce.
+
+    Este é o mesmo caminho percorrido pelo polling do painel a cada 12 s, então
+    o custo por requisição precisa ficar preso ao tamanho da página.
+    """
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Paginada', slug='pag')
+        self.staff = User.objects.create_user(
+            username='staff', password='pw', is_staff=True,
+        )
+        self.client.force_login(self.staff)
+        self.page_size = views.STAFF_FINISHED_PAGE_SIZE
+
+    def _make_orders(self, count, status):
+        for index in range(count):
+            Order.objects.create(
+                restaurant=self.restaurant, customer_name=f'Cliente {index}',
+                phone='555-0000', status=status,
+                subtotal=Decimal('10.00'), total=Decimal('10.00'),
+            )
+
+    def test_finished_orders_are_paginated(self):
+        total = self.page_size + 5
+        self._make_orders(total, Order.Status.DELIVERED)
+
+        response = self.client.get(reverse('orders:staff_order_list'))
+        self.assertEqual(len(response.context['inactive_orders']), self.page_size)
+        # A contagem em tela continua sendo o total, não o tamanho da página.
+        self.assertEqual(response.context['inactive_count'], total)
+        self.assertEqual(response.context['finished_page'].paginator.num_pages, 2)
+
+    def test_second_page_returns_the_remainder(self):
+        self._make_orders(self.page_size + 5, Order.Status.DELIVERED)
+        response = self.client.get(reverse('orders:staff_order_list'), {'page': 2})
+        self.assertEqual(len(response.context['inactive_orders']), 5)
+
+    def test_pagination_neither_repeats_nor_skips_orders(self):
+        """created_at é igual para pedidos do mesmo instante; o id desempata."""
+        total = self.page_size + 5
+        self._make_orders(total, Order.Status.DELIVERED)
+
+        url = reverse('orders:staff_order_list')
+        first = self.client.get(url).context['inactive_orders']
+        second = self.client.get(url, {'page': 2}).context['inactive_orders']
+
+        numbers = [o.order_number for o in first] + [o.order_number for o in second]
+        self.assertEqual(len(numbers), total)
+        self.assertEqual(len(set(numbers)), total)
+
+    def test_active_orders_are_not_paginated(self):
+        """A fila da cozinha precisa estar toda à vista — e é curta por natureza."""
+        total = self.page_size + 5
+        self._make_orders(total, Order.Status.RECEIVED)
+        response = self.client.get(reverse('orders:staff_order_list'))
+        self.assertEqual(len(response.context['active_orders']), total)
+
+    def test_invalid_page_falls_back_instead_of_failing(self):
+        self._make_orders(3, Order.Status.DELIVERED)
+        response = self.client.get(reverse('orders:staff_order_list'), {'page': 'abc'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['finished_page'].number, 1)
+
+    def test_feed_returns_the_pager(self):
+        self._make_orders(self.page_size + 1, Order.Status.DELIVERED)
+        body = self.client.get(reverse('orders:staff_orders_feed')).json()
+        self.assertIn('pager_html', body)
+        self.assertIn('1 de 2', body['pager_html'])
+
+    def test_signature_covers_changes_outside_the_current_page(self):
+        """Um pedido removido na 2ª página não muda a 1ª, mas muda a contagem."""
+        self._make_orders(self.page_size + 5, Order.Status.DELIVERED)
+        url = reverse('orders:staff_orders_feed')
+
+        before = self.client.get(url).json()
+        Order.objects.order_by('created_at', 'id').first().delete()
+        after = self.client.get(url).json()
+
+        self.assertEqual(before['inactive_html'], after['inactive_html'])
+        self.assertNotEqual(before['signature'], after['signature'])
+
+
+class OrderLocalDateFilterTests(TestCase):
+    """Filtros por data comparam datetime, para o índice de created_at valer.
+
+    A conversão precisa ser feita no fuso local: 23h30 em São Paulo já é o dia
+    seguinte em UTC, e o pedido apareceria na data errada para a equipe.
+    """
+
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Fuso', slug='fuso')
+        self.staff = User.objects.create_user(
+            username='staff', password='pw', is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    def _order_at(self, local_dt):
+        order = Order.objects.create(
+            restaurant=self.restaurant, customer_name='Noturno', phone='555',
+            subtotal=Decimal('30.00'), total=Decimal('30.00'),
+        )
+        Order.objects.filter(pk=order.pk).update(created_at=local_dt)
+        return order
+
+    def test_bounds_cover_the_whole_local_day(self):
+        day = date(2026, 3, 10)
+        first, last = selectors.local_day_bounds(day)
+        tz = timezone.get_current_timezone()
+        self.assertEqual(timezone.localtime(first, tz).date(), day)
+        self.assertEqual(timezone.localtime(last, tz).date(), day)
+        self.assertEqual(timezone.localtime(first, tz).hour, 0)
+        self.assertEqual(timezone.localtime(last, tz).hour, 23)
+
+    def test_late_night_order_stays_on_its_local_date(self):
+        tz = timezone.get_current_timezone()
+        order = self._order_at(timezone.make_aware(datetime(2026, 3, 10, 23, 30), tz))
+
+        response = self.client.get(
+            reverse('orders:staff_order_list'), {'date': '2026-03-10'},
+        )
+        numbers = [o.order_number for o in response.context['active_orders']]
+        self.assertIn(order.order_number, numbers)
+
+    def test_late_night_order_is_not_counted_on_the_next_day(self):
+        tz = timezone.get_current_timezone()
+        self._order_at(timezone.make_aware(datetime(2026, 3, 10, 23, 30), tz))
+
+        response = self.client.get(
+            reverse('orders:staff_order_list'), {'date': '2026-03-11'},
+        )
+        self.assertEqual(response.context['active_orders'], [])
+
+    def test_report_counts_the_order_on_its_local_day(self):
+        tz = timezone.get_current_timezone()
+        day = date(2026, 3, 10)
+        order = self._order_at(
+            timezone.make_aware(datetime.combine(day, time(23, 30)), tz),
+        )
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.DELIVERED)
+
+        report = selectors.get_sales_report(day, day)
+        self.assertEqual(report['order_count'], 1)
+        self.assertEqual(report['revenue'], Decimal('30.00'))

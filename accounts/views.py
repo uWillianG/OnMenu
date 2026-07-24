@@ -6,6 +6,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
+from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -196,16 +197,26 @@ def profile(request):
     )
 
 
+# Pedidos por página no histórico do cliente. Cada cartão traz os itens e os
+# complementos; sem recorte, um cliente antigo carregaria anos de pedidos.
+ORDER_HISTORY_PAGE_SIZE = 10
+
+
 @login_required
 def order_history(request):
-    """Tela de consulta: lista todos os pedidos do usuário."""
+    """Tela de consulta: lista os pedidos do usuário, do mais recente ao antigo."""
     orders = (
         Order.objects
         .filter(user=request.user)
         .prefetch_related('items__options')
-        .order_by('-created_at')
+        .order_by('-created_at', '-id')
     )
-    return render(request, 'registration/order_history.html', {'orders': orders})
+    page = Paginator(orders, ORDER_HISTORY_PAGE_SIZE).get_page(request.GET.get('page'))
+    return render(
+        request,
+        'registration/order_history.html',
+        {'orders': page, 'page': page},
+    )
 
 
 @login_required
