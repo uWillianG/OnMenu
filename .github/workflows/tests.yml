@@ -1,0 +1,37 @@
+name: Testes
+
+# Roda a suíte a cada push e em cada pull request para a master.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instala o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instala as dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Sem .env, o projeto roda em modo de desenvolvimento (SQLite, DEBUG=True,
+      # pagamentos/WhatsApp em mock) — é exatamente o ambiente que os testes usam.
+      - name: Verifica migrações pendentes
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: check
+        run: python manage.py check
+
+      - name: Testes
+        run: python manage.py test --verbosity=2

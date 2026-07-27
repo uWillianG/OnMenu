@@ -28,6 +28,10 @@ no log/console. Copie `.env.example` para `.env` para ligar cada integração.
 .\.venv\Scripts\python manage.py test
 ```
 
+A suíte também roda sozinha no **GitHub Actions** (`.github/workflows/tests.yml`)
+a cada push e em cada pull request para a `master`: confere migrações pendentes,
+`manage.py check` e todos os testes.
+
 ## Deploy
 
 ### 1. Variáveis de ambiente
