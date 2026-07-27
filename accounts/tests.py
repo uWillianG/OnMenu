@@ -1,10 +1,14 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from accounts import throttle
+from accounts.models import AccessAttempt
 from accounts.views import (
     GOOGLE_NEXT_SESSION_KEY,
     GOOGLE_STATE_SESSION_KEY,
@@ -733,3 +737,168 @@ class OrderHistoryPaginationTests(TestCase):
         self._make_orders(2)
         response = self.client.get(reverse('accounts:order_history'))
         self.assertNotContains(response, 'class="pager"')
+
+
+@override_settings(RATELIMIT_ENABLED=True, RATELIMIT_TRUST_FORWARDED=False)
+class ThrottleUnitTests(TestCase):
+    """A camada de limite (janela deslizante) isolada das views."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def test_record_then_block_at_the_limit(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit - 1):
+            throttle.record(throttle.LOGIN, '1.2.3.4')
+        self.assertFalse(throttle.is_blocked(throttle.LOGIN, '1.2.3.4'))
+        throttle.record(throttle.LOGIN, '1.2.3.4')
+        self.assertTrue(throttle.is_blocked(throttle.LOGIN, '1.2.3.4'))
+
+    def test_different_keys_do_not_share_a_counter(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit):
+            throttle.record(throttle.LOGIN, '1.1.1.1')
+        self.assertTrue(throttle.is_blocked(throttle.LOGIN, '1.1.1.1'))
+        self.assertFalse(throttle.is_blocked(throttle.LOGIN, '2.2.2.2'))
+
+    def test_clear_resets_the_counter(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit):
+            throttle.record(throttle.LOGIN, '9.9.9.9')
+        throttle.clear(throttle.LOGIN, '9.9.9.9')
+        self.assertFalse(throttle.is_blocked(throttle.LOGIN, '9.9.9.9'))
+
+    def test_attempts_outside_the_window_do_not_count(self):
+        limit, window = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit):
+            throttle.record(throttle.LOGIN, '8.8.8.8')
+        # Envelhece as tentativas para além da janela.
+        AccessAttempt.objects.filter(scope=throttle.LOGIN, key='8.8.8.8').update(
+            created_at=timezone.now() - timedelta(seconds=window + 60),
+        )
+        self.assertFalse(throttle.is_blocked(throttle.LOGIN, '8.8.8.8'))
+
+    def test_record_prunes_stale_rows_of_the_same_key(self):
+        _, window = throttle.RULES[throttle.LOGIN]
+        throttle.record(throttle.LOGIN, '7.7.7.7')
+        AccessAttempt.objects.filter(scope=throttle.LOGIN, key='7.7.7.7').update(
+            created_at=timezone.now() - timedelta(seconds=window + 60),
+        )
+        # A próxima gravação limpa as linhas velhas dessa chave.
+        throttle.record(throttle.LOGIN, '7.7.7.7')
+        self.assertEqual(
+            AccessAttempt.objects.filter(scope=throttle.LOGIN, key='7.7.7.7').count(), 1,
+        )
+
+    def test_client_ip_uses_remote_addr_by_default(self):
+        request = self.factory.post('/', REMOTE_ADDR='203.0.113.9')
+        request.META['HTTP_X_FORWARDED_FOR'] = '198.51.100.7'
+        self.assertEqual(throttle.client_ip(request), '203.0.113.9')
+
+    @override_settings(RATELIMIT_TRUST_FORWARDED=True)
+    def test_client_ip_trusts_forwarded_when_behind_proxy(self):
+        request = self.factory.post('/', REMOTE_ADDR='10.0.0.1')
+        request.META['HTTP_X_FORWARDED_FOR'] = '198.51.100.7, 10.0.0.1'
+        self.assertEqual(throttle.client_ip(request), '198.51.100.7')
+
+    @override_settings(RATELIMIT_ENABLED=False)
+    def test_disabled_flag_never_blocks(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit * 3):
+            throttle.record(throttle.LOGIN, '4.4.4.4')
+        self.assertFalse(throttle.is_blocked(throttle.LOGIN, '4.4.4.4'))
+        # Desligado, nem grava.
+        self.assertEqual(AccessAttempt.objects.count(), 0)
+
+
+@override_settings(RATELIMIT_ENABLED=True, RATELIMIT_TRUST_FORWARDED=False)
+class LoginThrottleTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='@cliente', email='c@example.com', password='Sup3rSecret!9',
+        )
+        self.url = reverse('accounts:login')
+
+    def _bad_login(self, **extra):
+        return self.client.post(
+            self.url, {'username': 'c@example.com', 'password': 'errada'}, **extra,
+        )
+
+    def _good_login(self, **extra):
+        return self.client.post(
+            self.url, {'username': 'c@example.com', 'password': 'Sup3rSecret!9'}, **extra,
+        )
+
+    def test_blocks_after_max_failures_even_with_correct_password(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit):
+            self._bad_login()
+        response = self._good_login()
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertContains(response, 'Muitas tentativas')
+
+    def test_successful_login_clears_the_counter(self):
+        for _ in range(3):
+            self._bad_login()
+        self._good_login()
+        self.assertIn('_auth_user_id', self.client.session)
+        self.assertFalse(AccessAttempt.objects.exists())
+
+    def test_same_account_is_protected_across_ips(self):
+        # IPs distintos: o limite por IP nunca acumula, mas o por conta sim.
+        limit, _ = throttle.RULES[throttle.LOGIN_USER]
+        for i in range(limit):
+            self._bad_login(REMOTE_ADDR=f'10.0.0.{i}')
+        response = self._good_login(REMOTE_ADDR='10.0.0.250')
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertContains(response, 'Muitas tentativas')
+
+    @override_settings(RATELIMIT_ENABLED=False)
+    def test_disabled_flag_allows_login_past_limit(self):
+        limit, _ = throttle.RULES[throttle.LOGIN]
+        for _ in range(limit + 2):
+            self._bad_login()
+        self._good_login()
+        self.assertIn('_auth_user_id', self.client.session)
+
+
+@override_settings(RATELIMIT_ENABLED=True, RATELIMIT_TRUST_FORWARDED=False)
+class SignupThrottleTests(TestCase):
+    def _signup(self, email, cpf):
+        return self.client.post(reverse('accounts:signup'), {
+            'full_name': 'Cliente Teste',
+            'email': email,
+            'phone': '(11) 99999-9999',
+            'cpf': cpf,
+            'password1': 'Sup3rSecret!9',
+            'password2': 'Sup3rSecret!9',
+        })
+
+    def test_blocks_after_limit(self):
+        limit, _ = throttle.RULES[throttle.SIGNUP]
+        AccessAttempt.objects.bulk_create(
+            AccessAttempt(scope=throttle.SIGNUP, key='127.0.0.1') for _ in range(limit)
+        )
+        before = User.objects.count()
+        response = self._signup('novo@example.com', '111.444.777-35')
+        self.assertContains(response, 'Muitas tentativas')
+        self.assertEqual(User.objects.count(), before)
+
+
+@override_settings(RATELIMIT_ENABLED=True, RATELIMIT_TRUST_FORWARDED=False)
+class PasswordResetThrottleTests(TestCase):
+    def setUp(self):
+        User.objects.create_user(
+            username='@cliente', email='c@example.com', password='Sup3rSecret!9',
+        )
+        self.url = reverse('accounts:password_reset')
+
+    def test_blocks_after_limit(self):
+        limit, _ = throttle.RULES[throttle.PASSWORD_RESET]
+        AccessAttempt.objects.bulk_create(
+            AccessAttempt(scope=throttle.PASSWORD_RESET, key='127.0.0.1')
+            for _ in range(limit)
+        )
+        response = self.client.post(self.url, {'email': 'c@example.com'})
+        self.assertEqual(response.status_code, 200)  # não redireciona para "done"
+        self.assertContains(response, 'Muitas tentativas')

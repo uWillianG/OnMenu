@@ -1605,3 +1605,74 @@ class OrderLocalDateFilterTests(TestCase):
         report = selectors.get_sales_report(day, day)
         self.assertEqual(report['order_count'], 1)
         self.assertEqual(report['revenue'], Decimal('30.00'))
+
+
+@override_settings(RATELIMIT_ENABLED=True, RATELIMIT_TRUST_FORWARDED=False)
+class CheckoutThrottleTests(TestCase):
+    """O checkout é limitado por IP (spam de pedidos / card testing)."""
+
+    def setUp(self):
+        from accounts.throttle import CHECKOUT, RULES
+
+        self.CHECKOUT = CHECKOUT
+        self.limit, _ = RULES[CHECKOUT]
+        self.restaurant = Restaurant.objects.create(name='Throttle Kitchen', slug='thr')
+        category = Category.objects.create(
+            restaurant=self.restaurant, name='Mains', slug='mains',
+        )
+        self.item = MenuItem.objects.create(
+            category=category, name='Burger', slug='burger',
+            price=Decimal('20.00'), is_available=True,
+        )
+
+    def _add(self):
+        self.client.post(reverse('cart:cart_add', args=[self.item.pk]), {'quantity': 1})
+
+    def _checkout_data(self):
+        return {
+            'fulfillment_method': Order.FulfillmentMethod.PICKUP,
+            'customer_name': 'Ada Lovelace',
+            'phone': '555-0100',
+            'payment_method': Order.PaymentMethod.CASH,
+        }
+
+    def _fill_bucket(self):
+        from accounts.models import AccessAttempt
+
+        AccessAttempt.objects.bulk_create(
+            AccessAttempt(scope=self.CHECKOUT, key='127.0.0.1')
+            for _ in range(self.limit)
+        )
+
+    def test_checkout_below_limit_succeeds(self):
+        self._add()
+        response = self.client.post(reverse('orders:checkout'), self._checkout_data())
+        self.assertTrue(Order.objects.exists())
+        self.assertEqual(response.status_code, 302)
+
+    def test_checkout_blocked_after_limit(self):
+        self._add()
+        self._fill_bucket()
+        response = self.client.post(reverse('orders:checkout'), self._checkout_data())
+        self.assertFalse(Order.objects.exists())
+        self.assertRedirects(
+            response, reverse('cart:cart_detail'), fetch_redirect_response=False,
+        )
+
+    def test_checkout_blocked_ajax_returns_429(self):
+        self._add()
+        self._fill_bucket()
+        response = self.client.post(
+            reverse('orders:checkout'), self._checkout_data(),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 429)
+        self.assertFalse(response.json()['ok'])
+        self.assertFalse(Order.objects.exists())
+
+    @override_settings(RATELIMIT_ENABLED=False)
+    def test_disabled_flag_allows_checkout_past_limit(self):
+        self._add()
+        self._fill_bucket()
+        self.client.post(reverse('orders:checkout'), self._checkout_data())
+        self.assertTrue(Order.objects.exists())

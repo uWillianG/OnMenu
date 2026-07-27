@@ -63,3 +63,32 @@ def ensure_profile(sender, instance, created, **kwargs):
     """Garante um Profile para todo usuário criado."""
     if created:
         Profile.objects.get_or_create(user=instance)
+
+
+class AccessAttempt(models.Model):
+    """Uma tentativa registrada numa tela sensível, para conter força bruta.
+
+    Uma linha por tentativa. O limite é uma **janela deslizante**: contamos as
+    tentativas do mesmo ``(scope, key)`` nos últimos N segundos e bloqueamos ao
+    atingir o teto. O bloqueio some sozinho conforme as tentativas antigas saem
+    da janela — não há campo de "bloqueado até". Linhas velhas são removidas na
+    própria gravação (por chave) e, em massa, pelo comando
+    ``prune_access_attempts``. Ver ``accounts.throttle``.
+    """
+
+    scope = models.CharField('Ação', max_length=32)
+    key = models.CharField('Chave (IP/identificador)', max_length=128)
+    created_at = models.DateTimeField('Quando', auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'tentativa de acesso'
+        verbose_name_plural = 'tentativas de acesso'
+        indexes = [
+            models.Index(
+                fields=['scope', 'key', 'created_at'],
+                name='access_attempt_lookup_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.scope}:{self.key} @ {self.created_at:%Y-%m-%d %H:%M:%S}'

@@ -111,9 +111,18 @@ preenchido e o SMTP configurado, também por e-mail.
 | `manage.py sync_pending_pix` | ~10 min | Confirma Pix pendentes quando o webhook falha |
 | `manage.py sync_pending_card` | ~30 min | Confirma cartões em análise (janela de ~24h) |
 | `manage.py backup_db` | 1 h ou diária | Cópia do SQLite (mantém as últimas `DJANGO_BACKUP_KEEP`) |
+| `manage.py prune_access_attempts` | diária | Faxina dos registros de tentativas (limite de força bruta) |
 
 Sem os dois primeiros, um pagamento aprovado fora do webhook fica preso em
-"pendente". Use o Agendador de Tarefas do Windows ou cron.
+"pendente". O `prune_access_attempts` é opcional (a tabela de tentativas se
+limpa sozinha por chave a cada gravação; a faxina só remove sobras de IPs que
+não voltaram). Use o Agendador de Tarefas do Windows ou cron.
+
+Login, cadastro, recuperação de senha e checkout têm **limite de tentativas por
+IP** (o login também protege a conta alvo contra ataque distribuído). Atrás de
+proxy/CDN, ligue `DJANGO_BEHIND_PROXY=True` para o IP real ser lido do
+`X-Forwarded-For`; caso contrário todos os pedidos parecem vir do proxy. Desligue
+com `DJANGO_RATELIMIT_ENABLED=False` só se um WAF já fizer esse controle.
 
 ### 8. Peso das imagens
 

@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import LoginView, PasswordResetView
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import redirect, render, resolve_url
@@ -22,6 +22,7 @@ from .forms import (
     _generate_username,
     _split_full_name,
 )
+from . import throttle
 from .models import Profile
 from .services import google as google_oauth
 
@@ -40,10 +41,51 @@ class CustomLoginView(LoginView):
         """Sem ?next=: todos vão para a tela principal (cardápio)."""
         return resolve_url('menu:menu_list')
 
+    def _throttle_keys(self, request):
+        """Duas dimensões: por IP e pela conta alvo (contra ataque distribuído)."""
+        keys = [(throttle.LOGIN, throttle.client_ip(request))]
+        identifier = (request.POST.get('username') or '').strip().lower()
+        if identifier:
+            keys.append((throttle.LOGIN_USER, identifier))
+        return keys
+
+    def post(self, request, *args, **kwargs):
+        keys = self._throttle_keys(request)
+        if any(throttle.is_blocked(scope, key) for scope, key in keys):
+            form = self.get_form()
+            form.add_error(None, throttle.retry_message(throttle.LOGIN))
+            return self.render_to_response(self.get_context_data(form=form))
+
+        response = super().post(request, *args, **kwargs)
+        # Sucesso zera os contadores; falha registra em cada dimensão. (Um bloqueio
+        # não registra nova tentativa, então a espera conta a partir da última
+        # tentativa real, sem se estender enquanto o usuário legítimo espera.)
+        if request.user.is_authenticated:
+            for scope, key in keys:
+                throttle.clear(scope, key)
+        else:
+            for scope, key in keys:
+                throttle.record(scope, key)
+        return response
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['google_oauth_enabled'] = settings.GOOGLE_OAUTH_ENABLED
         return context
+
+
+class ThrottledPasswordResetView(PasswordResetView):
+    """Recuperação de senha com limite por IP (contra bombardeio de e-mail e
+    enumeração de contas)."""
+
+    def post(self, request, *args, **kwargs):
+        ip = throttle.client_ip(request)
+        if throttle.is_blocked(throttle.PASSWORD_RESET, ip):
+            form = self.get_form()
+            form.add_error(None, throttle.retry_message(throttle.PASSWORD_RESET))
+            return self.form_invalid(form)
+        throttle.record(throttle.PASSWORD_RESET, ip)
+        return super().post(request, *args, **kwargs)
 
 
 def signup(request):
@@ -54,6 +96,20 @@ def signup(request):
         return redirect(_safe_next(request, next_url))
 
     if request.method == 'POST':
+        ip = throttle.client_ip(request)
+        if throttle.is_blocked(throttle.SIGNUP, ip):
+            messages.error(request, throttle.retry_message(throttle.SIGNUP))
+            return render(
+                request,
+                'registration/signup.html',
+                {
+                    'form': SignupForm(),
+                    'next': next_url,
+                    'hide_cart': True,
+                    'google_oauth_enabled': settings.GOOGLE_OAUTH_ENABLED,
+                },
+            )
+        throttle.record(throttle.SIGNUP, ip)
         form = SignupForm(request.POST)
         if form.is_valid():
             user = form.save()

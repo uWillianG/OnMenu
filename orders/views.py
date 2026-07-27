@@ -21,6 +21,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from accounts import throttle
 from cart.cart import Cart
 from menu.selectors import get_current_restaurant, is_restaurant_open
 
@@ -67,8 +68,19 @@ def checkout(request):
         return redirect('menu:menu_list')
 
     if request.method == 'POST':
-        form = CheckoutForm(request.POST)
         is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        # Limita a criação de pedidos por IP: contém spam de pedidos e o "card
+        # testing" (o card_pay já limita 3 tentativas por pedido, mas o atacante
+        # trocaria de pedido; aqui limitamos quantos pedidos ele consegue abrir).
+        ip = throttle.client_ip(request)
+        if throttle.is_blocked(throttle.CHECKOUT, ip):
+            msg = throttle.retry_message(throttle.CHECKOUT)
+            if is_ajax:
+                return JsonResponse({'ok': False, 'error': msg}, status=429)
+            messages.error(request, msg)
+            return redirect('cart:cart_detail')
+        throttle.record(throttle.CHECKOUT, ip)
+        form = CheckoutForm(request.POST)
         if form.is_valid():
             # Só depois de validar o form dá para saber se é entrega ou retirada.
             minimo = _minimum_order_error(restaurant, form.cleaned_data, cart.subtotal)

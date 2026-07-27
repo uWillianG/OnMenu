@@ -254,9 +254,19 @@ X_FRAME_OPTIONS = 'DENY'
 # Atrás de um proxy/load balancer que termina o TLS (nginx, Cloudflare, Heroku,
 # Render…), o Django precisa confiar no cabeçalho para reconhecer o HTTPS.
 # Só ligue quando existir mesmo esse proxy — senão o cabeçalho pode ser forjado.
-if env_bool('DJANGO_BEHIND_PROXY', False):
+BEHIND_PROXY = env_bool('DJANGO_BEHIND_PROXY', False)
+if BEHIND_PROXY:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     USE_X_FORWARDED_HOST = True
+
+# ── Limite de tentativas (força bruta / spam) ────────────────────────────────
+# Login, cadastro, recuperação de senha e checkout são limitados por IP (e o
+# login também pela conta alvo). Ver accounts/throttle.py. Desligue só se houver
+# outra camada fazendo esse controle (ex.: WAF).
+RATELIMIT_ENABLED = env_bool('DJANGO_RATELIMIT_ENABLED', True)
+# Só confie no X-Forwarded-For para achar o IP real quando há mesmo um proxy na
+# frente — senão o cliente forja o cabeçalho e escapa do limite trocando o valor.
+RATELIMIT_TRUST_FORWARDED = BEHIND_PROXY
 
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
