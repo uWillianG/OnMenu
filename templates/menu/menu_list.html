@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block body_class %}layout-menu{% endblock %}
+
 {% block title %}{% if restaurant %}{{ restaurant.name }}{% else %}Cardápio{% endif %} | OnMenu{% endblock %}
 
 {% block content %}
 {% if restaurant %}
 
   {# ── Restaurant hero ── #}
-  <section class="restaurant-hero">
-    {% if restaurant.logo %}
-      <span class="hero-wash" aria-hidden="true" style="background-image:url('{{ restaurant.logo.url }}')"></span>
-    {% endif %}
+  <section class="restaurant-hero{% if not hero_item %} no-photo{% endif %}">
 
     <div class="hero-inner">
+      <div class="hero-copy">
       <div class="hero-identity">
         <a class="hero-logo" href="{% url 'menu:restaurant_info' %}" aria-label="Ver informações de {{ restaurant.name }}">
           {% if restaurant.logo %}
@@ -33,7 +33,7 @@
             </div>
           {% endif %}
 
-          <h1><a class="hero-name-link" href="{% url 'menu:restaurant_info' %}">{{ restaurant.name }}</a></h1>
+          <h1{% if restaurant.name|length > 38 %} class="is-long-name"{% endif %}><a class="hero-name-link" href="{% url 'menu:restaurant_info' %}">{{ restaurant.name }}</a></h1>
 
           {% if restaurant.address %}
             <a class="hero-address" href="https://www.google.com/maps/search/?api=1&query={{ restaurant.address|urlencode }}" target="_blank" rel="noopener">
@@ -86,6 +86,13 @@
           </a>
         {% endif %}
       </div>{# /hero-actions #}
+      </div>
+      {% if hero_item %}
+      <a class="hero-art" href="{% url 'menu:item_detail' hero_item.pk hero_item.slug %}" aria-label="Ver {{ hero_item.name }}">
+        <img src="{% if hero_item.image %}{{ hero_item.image.url }}{% else %}{{ hero_item.image_url }}{% endif %}" alt="{{ hero_item.name }}" fetchpriority="high" width="640" height="400">
+        <span class="hero-art-caption"><span>{{ hero_item.name }}</span><span aria-hidden="true">↗</span></span>
+      </a>
+      {% endif %}
     </div>
   </section>
 
@@ -133,7 +140,7 @@
   {% endif %}
 
   {# ── Two-column layout: content + cart sidebar ── #}
-  <div class="page-wrapper">
+  <div class="page-wrapper" id="cardapio">
     <div class="menu-layout">
 
       {# ── Menu content ── #}
@@ -144,12 +151,12 @@
           <details class="menu-section featured" id="destaques" open>
             <summary>
               <svg class="sec-star" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Destaques
-              <span class="section-item-count">{{ featured_items|length }} ite{% if featured_items|length == 1 %}m{% else %}ns{% endif %}</span>
-              <span class="section-chevron">▼</span>
+              <span class="section-item-count">{{ featured_items|slice:":4"|length }} seleções</span>
+              <span class="section-chevron" aria-hidden="true">⌄</span>
             </summary>
             <div class="section-body">
-              <div class="product-list">
-                {% for item in featured_items %}
+              <div class="product-list featured-grid" data-count="{{ featured_items|slice:":4"|length }}">
+                {% for item in featured_items|slice:":4" %}
                   {% include 'menu/_product_card.html' with item=item %}
                 {% endfor %}
               </div>
@@ -159,11 +166,11 @@
 
         {# ── Categories ── #}
         {% for category in categories %}
-          <details class="menu-section" id="{{ category.slug }}">
+          <details class="menu-section" id="{{ category.slug }}"{% if forloop.first %} open{% endif %}>
             <summary>
               {{ category.name }}
               <span class="section-item-count">{{ category.items.all|length }} ite{% if category.items.all|length == 1 %}m{% else %}ns{% endif %}</span>
-              <span class="section-chevron">▼</span>
+              <span class="section-chevron" aria-hidden="true">⌄</span>
             </summary>
             <div class="section-body">
               <div class="product-list">
@@ -178,7 +185,8 @@
         {% empty %}
           <div class="empty-state">
             <h2>Cardápio em breve</h2>
-            <p>Adicione categorias e itens no painel de administração.</p>
+            <p>Estamos preparando novidades. Volte em breve para conferir.</p>
+            {% if request.user.is_staff %}<a class="btn-secondary" href="{% url 'menu:manage_menu' %}">Gerenciar cardápio</a>{% endif %}
           </div>
         {% endfor %}
 
@@ -194,7 +202,7 @@
       {# ── Sidebar cart (desktop only) ── #}
       <aside class="cart-sidebar">
         <div class="cart-sidebar-inner">
-          <div class="cart-sidebar-head">🛒 Seu pedido</div>
+          <div class="cart-sidebar-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 7h12l1 14H5L6 7Z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg>Seu pedido</div>
           {% if cart_items %}
             <div class="cart-sidebar-items">
               {% for entry in cart_items %}
@@ -233,8 +241,8 @@
 {% else %}
   <div class="page-wrapper">
     <div class="empty-state">
-      <h2>Restaurante não configurado</h2>
-      <p>Crie um restaurante ativo no Django admin para publicar o cardápio.</p>
+      <h2>Cardápio em breve</h2>
+      <p>Este restaurante ainda não disponibilizou o cardápio. Volte em breve para fazer seu pedido.</p>
     </div>
   </div>
 {% endif %}
@@ -254,7 +262,7 @@
         if (e.isIntersecting) {
           links.forEach((l) => l.classList.remove('active'));
           const active = document.querySelector(`.cat-link[data-section="${e.target.id}"]`);
-          if (active) { active.classList.add('active'); active.scrollIntoView({ inline: 'nearest', block: 'nearest' }); }
+          if (active) { active.classList.add('active'); const rail = active.parentElement; rail.scrollTo({ left: active.offsetLeft - rail.offsetLeft - 16, behavior: 'auto' }); }
         }
       });
     },
@@ -269,10 +277,13 @@
       const target = document.getElementById(link.dataset.section);
       if (!target) return;
       if (target.tagName === 'DETAILS' && !target.open) target.open = true;
-      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+      setTimeout(() => target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }), 30);
     });
   });
 })();
 </script>
-<script src="{% static 'js/item-modal.js' %}?v=2"></script>
+<script src="{% static 'js/item-modal.js' %}?v=3"></script>
+<script src="{% static 'js/vendor/gsap.min.js' %}"></script>
+<script src="{% static 'js/vendor/ScrollTrigger.min.js' %}"></script>
+<script src="{% static 'js/menu-motion.js' %}?v=1"></script>
 {% endblock %}

@@ -43,6 +43,7 @@ def menu_list(request):
     delivery_fee = None
     delivery_fee_from = False
     whatsapp_digits = ''
+    hero_item = None
     cart = Cart(request)
     cart_items = cart.items
 
@@ -56,13 +57,20 @@ def menu_list(request):
                 .prefetch_related('complement_groups__choices'),
             ),
         )
-        featured_items = (
+        featured_items = list(
             MenuItem.objects
             .filter(category__restaurant=restaurant, is_featured=True, is_available=True)
             .select_related('category')
             .prefetch_related('complement_groups__choices')
             .order_by('display_order', 'name')
         )
+        hero_item = next((item for item in featured_items if item.image or item.image_url), None)
+        if hero_item is None:
+            hero_item = next(
+                (item for category in categories for item in category.items.all()
+                 if item.image or item.image_url),
+                None,
+            )
         open_status = get_open_status(restaurant)
         delivery_fee, delivery_fee_from = _hero_delivery_fee(restaurant)
         whatsapp_digits = ''.join(filter(str.isdigit, restaurant.whatsapp_number))
@@ -74,6 +82,7 @@ def menu_list(request):
             'restaurant': restaurant,
             'categories': categories,
             'featured_items': featured_items,
+            'hero_item': hero_item,
             'is_open': open_status['is_open'],
             'open_status': open_status,
             'hero_delivery_fee': delivery_fee,

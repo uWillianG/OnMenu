@@ -5,6 +5,7 @@
 {% block content %}
 <div class="page-content">
   <h1 class="page-title">Finalizar pedido</h1>
+  <p class="page-lead">Só falta escolher como receber e pagar. Confira os detalhes do seu pedido.</p>
 
   <div class="checkout-layout">
 
@@ -339,7 +340,7 @@
     : null;
 
   function num(v) { return parseFloat((v || '0').toString().replace(',', '.')) || 0; }
-  function money(n) { return n.toFixed(2); }
+  function money(n) { return n.toFixed(2).replace('.', ','); }
 
   function buildNeighborhoods(cityId, selectId) {
     if (!nbSel) return;

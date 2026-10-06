@@ -71,6 +71,56 @@ class MenuViewsTests(TestCase):
         self.assertContains(response, 'Adicionar ao carrinho')
 
 
+class MenuPresentationTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name='Cozinha da Casa', slug='casa')
+        self.category = Category.objects.create(
+            restaurant=self.restaurant, name='Pratos', slug='pratos', display_order=1,
+        )
+
+    def item(self, name, **kwargs):
+        return MenuItem.objects.create(
+            category=self.category, name=name, slug=name.lower(), price=Decimal('25.00'),
+            **kwargs,
+        )
+
+    def test_hero_uses_an_available_photo_when_there_are_no_featured_items(self):
+        self.item('Oculto', is_available=False, image_url='https://example.test/oculto.jpg')
+        item = self.item('Prato', image_url='https://example.test/prato.jpg')
+        response = self.client.get(reverse('menu:menu_list'))
+        self.assertEqual(response.context['hero_item'], item)
+        self.assertContains(response, 'https://example.test/prato.jpg')
+        self.assertNotContains(response, 'https://example.test/oculto.jpg')
+
+    def test_featured_photo_takes_priority_over_category_photos(self):
+        self.item('Entrada', image_url='https://example.test/entrada.jpg', display_order=1)
+        item = self.item('Especial', is_featured=True, image_url='https://example.test/especial.jpg')
+        response = self.client.get(reverse('menu:menu_list'))
+        self.assertEqual(response.context['hero_item'], item)
+
+    def test_menu_without_photos_keeps_the_identity_and_first_category_open(self):
+        self.item('Prato')
+        response = self.client.get(reverse('menu:menu_list'))
+        self.assertIsNone(response.context['hero_item'])
+        self.assertContains(response, 'restaurant-hero no-photo')
+        self.assertContains(response, 'id="pratos" open')
+        self.assertNotContains(response, 'class="hero-art"')
+
+    def test_featured_preview_is_limited_without_removing_catalog_items(self):
+        items = [self.item(f'Prato{i}', is_featured=True) for i in range(6)]
+        response = self.client.get(reverse('menu:menu_list'))
+        featured = response.content.decode().split('id="destaques" open>', 1)[1].split('</details>', 1)[0]
+        self.assertEqual(featured.count('class="product-card'), 4)
+        for item in items:
+            self.assertContains(response, f'id="modal-data-{item.pk}"')
+
+    def test_staff_uses_public_navigation_on_the_menu_and_staff_navigation_on_the_panel(self):
+        user = get_user_model().objects.create_user(username='equipe', is_staff=True)
+        self.client.force_login(user)
+        self.assertContains(self.client.get(reverse('menu:menu_list')), 'body class="layout-menu"')
+        self.assertContains(self.client.get(reverse('orders:staff_order_list')), 'body class="layout-staff"')
+
+
 class RestaurantInfoTests(TestCase):
     def setUp(self):
         self.restaurant = Restaurant.objects.create(

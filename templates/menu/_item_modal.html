@@ -1,7 +1,7 @@
 {% comment %}Modal de produto (adicionar ao carrinho). Reutilizado na tela
 principal e no carrinho. Requer os divs #modal-data-<pk> na página
 (ver _modal_data.html) e o script static/js/item-modal.js.{% endcomment %}
-<div id="item-modal" class="modal-overlay" hidden aria-modal="true" role="dialog" data-currency="{{ currency_symbol }}">
+<div id="item-modal" class="modal-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="modal-name" data-currency="{{ currency_symbol }}">
   <div class="modal-card">
     <button class="modal-close" id="modal-close" type="button" aria-label="Fechar">✕</button>
     <div class="modal-image-wrap">

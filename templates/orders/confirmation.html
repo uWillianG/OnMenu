@@ -11,7 +11,7 @@
        data-order-status="{{ order.status }}">
 
     <div class="confirmation-hero">
-      <p class="eyebrow">✅ Pedido recebido</p>
+      <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>Pedido recebido</p>
       <h1>{{ order.order_number }}</h1>
       <p class="status-text">Status: <strong data-order-status-text>{{ order.status_display }}</strong></p>
       <p class="status-text">
@@ -22,12 +22,10 @@
       </p>
       <p class="status-text">Total: <strong>{{ currency_symbol }} {{ order.total|floatformat:2 }}</strong></p>
       <div class="confirmation-actions">
-        <a class="btn-secondary" href="{% url 'orders:track_order' order.order_number %}"
-           style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff">
-          📍 Acompanhar pedido
+        <a class="btn-secondary" href="{% url 'orders:track_order' order.order_number %}">
+          Acompanhar pedido
         </a>
-        <a class="btn-secondary" href="{% url 'menu:menu_list' %}"
-           style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff">
+        <a class="btn-secondary" href="{% url 'menu:menu_list' %}">
           Voltar ao cardápio
         </a>
       </div>
@@ -40,7 +38,7 @@
     </div>
 
     <div class="receipt-panel">
-      <div class="receipt-title">🧾 Resumo do pedido</div>
+      <div class="receipt-title">Resumo do pedido</div>
       {% for item in order.items.all %}
         <div class="summary-row">
           <span>
