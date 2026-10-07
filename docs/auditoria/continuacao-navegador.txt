@@ -1,0 +1,198 @@
+{
+  "navegador": "Chrome headless",
+  "pagamentos": "mock",
+  "redeExternaBloqueadaParaSDK": true,
+  "historicoEAcaoDeEstornoDisponiveis": true,
+  "estornoConfirmadoNoPainel": true,
+  "cartaoRetentativaCorrigida": true,
+  "pixRetomadaDisponivel": true,
+  "desafio3dsComDadosCorretos": true,
+  "sdk3dsSimulado": true,
+  "scriptsEstaticosComSintaxeValida": 5,
+  "scriptsInlineComSintaxeValida": 69,
+  "capturas": [
+    {
+      "nome": "cardapio-mobile",
+      "titulo": "Cozinha da Auditoria | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/"
+    },
+    {
+      "nome": "produto-mobile",
+      "titulo": "Cozinha da Auditoria | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/"
+    },
+    {
+      "nome": "carrinho-mobile",
+      "titulo": "Carrinho | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/cart/"
+    },
+    {
+      "nome": "cartao-recusado-mobile",
+      "titulo": "Finalizar pedido | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/checkout/"
+    },
+    {
+      "nome": "cartao-retentativa-aprovada-mobile",
+      "titulo": "Pedido OM-1 | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/confirmation/OM-1/"
+    },
+    {
+      "nome": "pix-mobile",
+      "titulo": "Finalizar pedido | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/checkout/"
+    },
+    {
+      "nome": "pix-confirmacao-com-retomada-mobile",
+      "titulo": "Pedido OM-2 | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/confirmation/OM-2/"
+    },
+    {
+      "nome": "retomar-pix-mobile",
+      "titulo": "Pagar pedido OM-2 | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/OM-2/payment/"
+    },
+    {
+      "nome": "desafio-3ds-sdk-simulado-mobile",
+      "titulo": "Finalizar pedido | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/orders/checkout/"
+    },
+    {
+      "nome": "pagamento-e-estorno-mobile",
+      "titulo": "OM-1 | Painel | OnMenu",
+      "largura": 390,
+      "larguraDocumento": 390,
+      "url": "/staff/orders/OM-1/"
+    },
+    {
+      "nome": "pagamento-e-estorno-desktop",
+      "titulo": "OM-1 | Painel | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/staff/orders/OM-1/"
+    },
+    {
+      "nome": "pagamento-estornado-desktop",
+      "titulo": "OM-1 | Painel | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/staff/orders/OM-1/"
+    },
+    {
+      "nome": "cardapio-desktop",
+      "titulo": "Cozinha da Auditoria | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/"
+    },
+    {
+      "nome": "informacoes-desktop",
+      "titulo": "Informações | Cozinha da Auditoria",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/informacoes/"
+    },
+    {
+      "nome": "painel-desktop",
+      "titulo": "Painel de pedidos | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/staff/orders/"
+    },
+    {
+      "nome": "relatorios-desktop",
+      "titulo": "Relatórios | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/staff/relatorios/"
+    },
+    {
+      "nome": "gestao-desktop",
+      "titulo": "Gerenciar cardápio | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/staff/cardapio/"
+    },
+    {
+      "nome": "horarios-desktop",
+      "titulo": "Horário de funcionamento | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/staff/horarios/"
+    },
+    {
+      "nome": "perfil-desktop",
+      "titulo": "Meu perfil | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/accounts/perfil/"
+    },
+    {
+      "nome": "historico-desktop",
+      "titulo": "Meus pedidos | OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/accounts/meus-pedidos/"
+    },
+    {
+      "nome": "privacidade-desktop",
+      "titulo": "Privacidade | Cozinha da Auditoria",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/privacidade/"
+    },
+    {
+      "nome": "termos-desktop",
+      "titulo": "Condições dos pedidos | Cozinha da Auditoria",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/termos/"
+    },
+    {
+      "nome": "configuracao-desktop",
+      "titulo": "Editar informações | Cozinha da Auditoria",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/informacoes/editar/"
+    },
+    {
+      "nome": "regioes-desktop",
+      "titulo": "OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/staff/entrega/"
+    },
+    {
+      "nome": "lancamento-desktop",
+      "titulo": "OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1425,
+      "url": "/staff/lancamento/"
+    },
+    {
+      "nome": "solicitacoes-desktop",
+      "titulo": "OnMenu",
+      "largura": 1440,
+      "larguraDocumento": 1440,
+      "url": "/accounts/staff/privacidade/"
+    }
+  ],
+  "excecoesJavaScript": []
+}

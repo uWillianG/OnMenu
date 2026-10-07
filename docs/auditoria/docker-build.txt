@@ -1,0 +1,51 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.32kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 280B done
+#3 DONE 0.0s
+
+#4 [1/7] FROM docker.io/library/python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
+#4 resolve docker.io/library/python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 38.23kB 0.0s done
+#5 DONE 0.0s
+
+#6 [3/7] RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates     && mkdir -p /usr/share/postgresql-common/pgdg     && curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc     && . /etc/os-release     && printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" > /etc/apt/sources.list.d/pgdg.list     && apt-get update && apt-get install -y --no-install-recommends "postgresql-client-17"     && rm -rf /var/lib/apt/lists/*
+#6 CACHED
+
+#7 [4/7] COPY requirements.txt requirements-production.txt ./
+#7 CACHED
+
+#8 [2/7] WORKDIR /app
+#8 CACHED
+
+#9 [5/7] RUN pip install --no-cache-dir -r requirements-production.txt
+#9 CACHED
+
+#10 [6/7] RUN useradd --create-home --uid 10001 onmenu && mkdir -p /data/media /data/backups && chown -R onmenu:onmenu /data /app
+#10 CACHED
+
+#11 [7/7] COPY --chown=onmenu:onmenu . .
+#11 DONE 0.0s
+
+#12 exporting to image
+#12 exporting layers 0.1s done
+#12 exporting manifest sha256:de072dd5bbf1d90d3a358507c72eff39258e222f401be1a9d62a1acd4b1a0cd9 done
+#12 exporting config sha256:fb8535ddae01eb7aa99eedfe487281f0b03a578d24932740df074bb9504f048a done
+#12 exporting attestation manifest sha256:d2a79a36de51e7ce3694481aac8328c9e40d23158ea6718423a533b016c4df66 0.0s done
+#12 exporting manifest list sha256:a6f075561d95c27d38bde47ff9914a303cce27b71234ee082a7ddedb9e483c98 done
+#12 naming to docker.io/library/onmenu-audit:local done
+#12 unpacking to docker.io/library/onmenu-audit:local 0.0s done
+#12 DONE 0.2s

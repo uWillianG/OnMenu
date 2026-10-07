@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Condições dos pedidos | {{ restaurant.name|default:'OnMenu' }}{% endblock %}
+{% block content %}
+<div class="page-content"><article class="detail-card">
+  <h1>Condições dos pedidos</h1>
+  <p>Os produtos, preços, complementos, regiões de entrega e horários disponíveis são apresentados pelo estabelecimento no cardápio. O valor dos itens e da entrega aparece antes de confirmar o pedido.</p>
+  <p>Pedidos com pagamento online aguardam a confirmação do provedor antes de entrar em preparo. Para dinheiro ou cartão na entrega, o recebimento segue a modalidade escolhida. Os prazos de entrega apresentados são estimativas do estabelecimento.</p>
+  <p>Informe um endereço e telefone corretos, confira os complementos e use as observações para orientar o preparo. Para dúvidas sobre ingredientes ou restrições alimentares, entre em contato com o estabelecimento antes de pedir.</p>
+  <h2>Alteração, cancelamento e estorno</h2>
+  <p>Entre em contato com o estabelecimento para solicitar alteração ou cancelamento. A equipe verificará a etapa de preparo e as condições da solicitação. Quando houver cancelamento de um pagamento online aprovado, o responsável deve solicitar o estorno pelo provedor; o prazo de disponibilização depende do meio de pagamento e da instituição financeira.</p>
+  {% if restaurant.contact_email %}<p>Atendimento: <a href="mailto:{{ restaurant.contact_email }}">{{ restaurant.contact_email }}</a>.</p>{% endif %}
+  {% if restaurant.phone %}<p>Telefone: <a href="tel:{{ restaurant.phone }}">{{ restaurant.phone }}</a>.</p>{% endif %}
+  <p><a href="{% url 'menu:privacy' %}">Como seus dados são utilizados</a></p>
+</article></div>
+{% endblock %}

@@ -9,10 +9,13 @@ from django.contrib.auth.forms import (
     UserCreationForm,
 )
 from django.contrib.auth.models import User
+from django.db import IntegrityError, transaction
+from django.db.models import F
 
 from orders.models import City, Neighborhood
 
 from .models import Profile
+from .validators import validate_cpf, validate_phone
 
 PASSWORD_HELP_TEXT = (
     'Mínimo de 8 caracteres, com letra maiúscula, minúscula, '
@@ -89,10 +92,7 @@ def _phone_field():
 
 
 def _clean_phone(value):
-    digits = ''.join(ch for ch in (value or '') if ch.isdigit())
-    if len(digits) < 10:
-        raise forms.ValidationError('Informe um telefone válido com DDD.')
-    return value.strip()
+    return validate_phone(value)
 
 
 class StyledFormMixin:
@@ -160,7 +160,7 @@ class SignupForm(StyledFormMixin, UserCreationForm):
         return _clean_full_name(self.cleaned_data.get('full_name'))
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = self.cleaned_data['email'].strip().casefold()
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('Já existe uma conta com este e-mail.')
         return email
@@ -169,9 +169,7 @@ class SignupForm(StyledFormMixin, UserCreationForm):
         return _clean_phone(self.cleaned_data.get('phone'))
 
     def clean_cpf(self):
-        digits = _only_digits(self.cleaned_data.get('cpf'))
-        if len(digits) != 11:
-            raise forms.ValidationError('CPF inválido.')
+        digits = validate_cpf(self.cleaned_data.get('cpf'))
         if Profile.objects.filter(cpf=digits).exists():
             raise forms.ValidationError('Já existe uma conta com este CPF.')
         return digits
@@ -185,12 +183,26 @@ class SignupForm(StyledFormMixin, UserCreationForm):
         # @handle usa o primeiro e o ÚLTIMO nome (ignora nomes do meio).
         user.username = _generate_username(parts[0], parts[-1])
         if commit:
-            user.save()
-            # O signal post_save já cria o Profile; gravamos telefone e CPF.
-            profile, _ = Profile.objects.get_or_create(user=user)
-            profile.phone = self.cleaned_data['phone']
-            profile.cpf = self.cleaned_data['cpf']
-            profile.save()
+            for attempt in range(5):
+                try:
+                    with transaction.atomic():
+                        User.objects.filter(pk=-1).update(email=F('email'))
+                        user.username = _generate_username(parts[0], parts[-1])
+                        user.save()
+                        profile, _ = Profile.objects.get_or_create(user=user)
+                        profile.phone = self.cleaned_data['phone']
+                        profile.cpf = self.cleaned_data['cpf']
+                        profile.save()
+                    break
+                except IntegrityError as exc:
+                    user.pk = None
+                    user._state.adding = True
+                    if User.objects.filter(email__iexact=user.email).exists():
+                        raise forms.ValidationError('Já existe uma conta com este e-mail.') from exc
+                    if Profile.objects.filter(cpf=self.cleaned_data['cpf']).exists():
+                        raise forms.ValidationError('Já existe uma conta com este CPF.') from exc
+                    if attempt == 4:
+                        raise forms.ValidationError('Não foi possível criar a conta. Tente novamente.') from exc
         return user
 
 
@@ -237,12 +249,13 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
         return _clean_phone(self.cleaned_data.get('phone'))
 
     def clean_email(self):
-        email = self.cleaned_data['email']
+        email = self.cleaned_data['email'].strip().casefold()
         taken = User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk)
         if taken.exists():
             raise forms.ValidationError('Já existe uma conta com este e-mail.')
         return email
 
+    @transaction.atomic
     def save(self, commit=True):
         user = super().save(commit=False)
         first, last = _split_full_name(self.cleaned_data['full_name'])

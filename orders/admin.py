@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 
 from .models import (
     CardPayment,
@@ -10,6 +11,8 @@ from .models import (
     OrderItemOption,
     OrderStatusChange,
     PixPayment,
+    PaymentAttempt,
+    WhatsAppMessage,
 )
 
 
@@ -99,7 +102,7 @@ class OrderAdmin(admin.ModelAdmin):
         'status',
         'created_at',
     )
-    list_editable = ('status',)
+    list_editable = ()
     search_fields = ('order_number', 'customer_name', 'phone', 'address')
     readonly_fields = (
         'order_number',
@@ -111,11 +114,33 @@ class OrderAdmin(admin.ModelAdmin):
     )
     inlines = [OrderItemInline, OrderStatusChangeInline]
 
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in Order._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ('order', 'item_name', 'quantity', 'unit_price', 'line_total')
     search_fields = ('order__order_number', 'item_name')
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and (obj.order.requires_online_payment or obj.order.is_paid):
+            return tuple(field.name for field in OrderItem._meta.fields)
+        return super().get_readonly_fields(request, obj)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and (obj.order.requires_online_payment or obj.order.is_paid):
+            return False
+        return super().has_delete_permission(request, obj)
 
     # Mexer nos itens muda o valor do pedido: o subtotal/total precisam ser
     # refeitos, senão o pedido continua mostrando o valor do checkout.
@@ -125,16 +150,22 @@ class OrderItemAdmin(admin.ModelAdmin):
             order.recalculate_totals()
 
     def save_model(self, request, obj, form, change):
+        if obj.order.requires_online_payment or obj.order.is_paid:
+            raise PermissionDenied('Itens de pedidos online ou pagos são preservados como comprovante da compra.')
         previous_order_id = form.initial.get('order') if change else None
         super().save_model(request, obj, form, change)
         self._refresh_totals(obj.order_id, previous_order_id)
 
     def delete_model(self, request, obj):
+        if obj.order.requires_online_payment or obj.order.is_paid:
+            raise PermissionDenied('Itens de pedidos online ou pagos não podem ser excluídos.')
         order_id = obj.order_id
         super().delete_model(request, obj)
         self._refresh_totals(order_id)
 
     def delete_queryset(self, request, queryset):
+        if queryset.filter(order__payment_method__in=['pix', 'credit_card']).exists() or queryset.filter(order__payment_status__in=Order.PAID_STATUSES).exists():
+            raise PermissionDenied('Itens de pedidos online ou pagos não podem ser excluídos.')
         order_ids = set(queryset.values_list('order_id', flat=True))
         super().delete_queryset(request, queryset)
         self._refresh_totals(*order_ids)
@@ -146,6 +177,7 @@ class PixPaymentAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     search_fields = ('external_reference', 'mp_payment_id', 'order__order_number')
     readonly_fields = (
+        'status',
         'order',
         'mp_payment_id',
         'external_reference',
@@ -180,3 +212,27 @@ class CardPaymentAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     )
+
+
+@admin.register(PaymentAttempt)
+class PaymentAttemptAdmin(admin.ModelAdmin):
+    list_display = ('order', 'method', 'status', 'amount', 'mp_payment_id', 'created_at')
+    list_filter = ('method', 'status')
+    search_fields = ('order__order_number', 'mp_payment_id', 'external_reference')
+    readonly_fields = tuple(field.name for field in PaymentAttempt._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(WhatsAppMessage)
+class WhatsAppMessageAdmin(admin.ModelAdmin):
+    list_display = ('order', 'status', 'attempts', 'created_at')
+    list_filter = ('status',)
+    readonly_fields = tuple(field.name for field in WhatsAppMessage._meta.fields)
+
+    def has_add_permission(self, request):
+        return False

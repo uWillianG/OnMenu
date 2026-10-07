@@ -151,6 +151,18 @@
 
     </div>{# .profile-aside #}
 
+    <section class="checkout-card">
+      <h2>Privacidade</h2>
+      <a class="btn-secondary" href="{% url 'accounts:export_data' %}">Exportar meus dados</a>
+      {% if not request.user.is_staff %}
+      <form method="post" action="{% url 'accounts:request_deletion' %}">{% csrf_token %}
+        <label><input type="checkbox" name="confirm_delete" required> Desejo solicitar a exclusão da conta e dos meus dados pessoais.</label>
+        <button class="btn-danger" type="submit">Solicitar exclusão</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'menu:privacy' %}">Política de privacidade</a>
+    </section>
+
     {# ── Atalho para a tela de pedidos ──────────────────────────── #}
     <section class="checkout-card profile-orders-link">
       <div class="checkout-card-head">

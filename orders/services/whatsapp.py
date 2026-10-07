@@ -34,7 +34,7 @@ def formatar_numero(phone: str) -> str:
     if not digits:
         return ''
     cc = settings.WHATSAPP_DEFAULT_COUNTRY_CODE
-    if cc and not digits.startswith(cc) and len(digits) <= 11:
+    if cc and len(digits) in (10, 11):
         digits = f'{cc}{digits}'
     return digits
 

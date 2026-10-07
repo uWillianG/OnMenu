@@ -10,12 +10,16 @@ sem mudança.
 
 from .checkout import checkout, repeat_order
 from .customer import (
+    stop_whatsapp,
     confirmation,
     notifications_feed,
     notifications_list,
     track_order,
 )
 from .payments import (
+    payment_state,
+    payment_change,
+    payment_resume,
     card_3ds_callback,
     card_pay,
     card_status,
@@ -25,6 +29,7 @@ from .payments import (
     webhook_pix,
 )
 from .staff import (
+    staff_order_refund,
     STAFF_FINISHED_PAGE_SIZE,
     staff_order_detail,
     staff_order_list,
@@ -37,6 +42,7 @@ from .staff import (
 )
 
 __all__ = [
+    'payment_resume',
     'checkout',
     'repeat_order',
     'confirmation',

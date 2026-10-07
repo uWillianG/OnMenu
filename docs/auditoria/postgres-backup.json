@@ -1,0 +1,9 @@
+{
+  "banco": "PostgreSQL 16",
+  "backup": "pg_dump custom",
+  "restauracao": "pg_restore",
+  "pedido_preservado": true,
+  "conta_preservada": true,
+  "upload_preservado": true,
+  "credenciais_e_dados": "fictícios"
+}

@@ -1,13 +1,29 @@
 from decimal import Decimal
 
-from django.db import models
+from django.db import models, transaction
+from django.db.models import F
 from django.utils.text import slugify
 
 from .imaging import LOGO_SIZE, MENU_PHOTO_SIZE, compress_pending_upload
 
 
+def unique_slug(instance, scope, max_length, fallback):
+    base = (instance.slug or slugify(instance.name) or fallback)[:max_length]
+    candidate = base
+    suffix = 2
+    while instance.__class__.objects.filter(**scope, slug=candidate).exclude(pk=instance.pk).exists():
+        tail = f'-{suffix}'
+        candidate = base[:max_length - len(tail)] + tail
+        suffix += 1
+    return candidate
+
+
 class Restaurant(models.Model):
     name = models.CharField(max_length=120)
+    legal_name = models.CharField('Razão social / responsável', max_length=200, blank=True)
+    registration_number = models.CharField('CNPJ / identificação do responsável', max_length=30, blank=True)
+    contact_email = models.EmailField('E-mail de atendimento e privacidade', blank=True)
+    accepting_orders = models.BooleanField('Receber pedidos agora', default=True)
     slug = models.SlugField(max_length=140, unique=True, blank=True)
     logo = models.ImageField(upload_to='restaurant/', blank=True)
     phone = models.CharField(max_length=40, blank=True)
@@ -53,8 +69,7 @@ class Restaurant(models.Model):
         ordering = ['name']
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)[:140] or 'restaurant'
+        self.slug = unique_slug(self, {}, 140, 'restaurant')
         compress_pending_upload(self.logo, max_size=LOGO_SIZE)
         super().save(*args, **kwargs)
 
@@ -114,9 +129,10 @@ class Category(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)[:100] or 'category'
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            Restaurant.objects.filter(pk=self.restaurant_id).update(is_active=F('is_active'))
+            self.slug = unique_slug(self, {'restaurant_id': self.restaurant_id}, 100, 'category')
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -155,10 +171,11 @@ class MenuItem(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)[:140] or 'menu-item'
         compress_pending_upload(self.image, max_size=MENU_PHOTO_SIZE)
-        super().save(*args, **kwargs)
+        with transaction.atomic():
+            Category.objects.filter(pk=self.category_id).update(is_active=F('is_active'))
+            self.slug = unique_slug(self, {'category_id': self.category_id}, 140, 'menu-item')
+            super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

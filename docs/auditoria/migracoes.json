@@ -1,0 +1,12 @@
+{
+  "registros_preservados": true,
+  "contagens": {
+    "orders_order": 20,
+    "orders_orderitem": 21,
+    "menu_restaurant": 5,
+    "menu_menuitem": 58,
+    "auth_user": 5,
+    "accounts_profile": 5
+  },
+  "migrações_aplicadas_em": "cópia isolada"
+}

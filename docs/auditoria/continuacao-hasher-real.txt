@@ -1,0 +1,12 @@
+Creating test database for alias 'default'...
+
+..........2026-10-07 19:49:30,526 WARNING orders.views.payments: 3DS callback: falha ao consultar MOCK-74f79bc08d3a
+..........
+----------------------------------------------------------------------
+Ran 20 tests in 0.684s
+
+OK
+Destroying test database for alias 'default'...
+
+Found 20 test(s).
+System check identified no issues (0 silenced).

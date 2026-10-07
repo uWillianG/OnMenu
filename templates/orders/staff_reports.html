@@ -47,6 +47,13 @@
       </div>
     </div>
 
+    <section class="detail-card">
+      <p>O faturamento considera pagamentos confirmados e pedidos presenciais concluídos.</p>
+      <p>Estornos registrados: <strong>{{ currency_symbol }} {{ report.refunded|floatformat:2 }}</strong>. O faturamento desconta os estornos parciais.</p>
+      <p>A receber na entrega/retirada: <strong>{{ currency_symbol }} {{ report.receivable|floatformat:2 }}</strong>.</p>
+      <p>Pagamentos online pendentes: <strong>{{ currency_symbol }} {{ report.online_pending|floatformat:2 }}</strong> ({{ report.online_pending_count }} pedido{{ report.online_pending_count|pluralize }}).</p>
+    </section>
+
     {% if report.order_count %}
 
       {# ── Faturamento por dia ── #}

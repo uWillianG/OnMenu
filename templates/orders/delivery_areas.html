@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block body_class %}layout-staff{% endblock %}
+{% block content %}<div class="page-content"><h1>Regiões de entrega</h1>
+<p>A taxa final soma a taxa da cidade e a taxa adicional do bairro. Desative regiões que não serão atendidas.</p>
+{% if editing %}<section class="detail-card"><form method="post">{% csrf_token %}{% include 'includes/form_fields.html' with form=edit_form %}<button class="btn-primary">Salvar alterações</button></form><a href="{% url 'orders:delivery_areas' %}">Voltar</a></section>
+{% else %}
+<div class="info-grid">
+  <section class="detail-card"><h2>Nova cidade</h2><form method="post">{% csrf_token %}<input type="hidden" name="kind" value="city">{% include 'includes/form_fields.html' with form=city_form %}<button class="btn-primary">Cadastrar cidade</button></form></section>
+  <section class="detail-card"><h2>Novo bairro</h2><form method="post">{% csrf_token %}<input type="hidden" name="kind" value="neighborhood">{% include 'includes/form_fields.html' with form=neighborhood_form %}<button class="btn-primary">Cadastrar bairro</button></form></section>
+</div>
+{% for city in cities %}<section class="detail-card"><h2>{{ city.name }} — R$ {{ city.delivery_fee|floatformat:2 }}{% if not city.is_active %} (desativada){% endif %}</h2><a class="btn-secondary" href="{% url 'orders:edit_delivery_area' 'city' city.pk %}">Editar cidade</a>
+  {% for neighborhood in city.neighborhoods.all %}<p>{{ neighborhood.name }} — adicional R$ {{ neighborhood.delivery_fee|floatformat:2 }}{% if not neighborhood.is_active %} (desativado){% endif %} · <a href="{% url 'orders:edit_delivery_area' 'neighborhood' neighborhood.pk %}">Editar</a></p>{% empty %}<p>Cadastre os bairros atendidos nesta cidade.</p>{% endfor %}
+</section>{% empty %}<p>Nenhuma região cadastrada. A retirada pode continuar disponível.</p>{% endfor %}
+{% endif %}</div>{% endblock %}

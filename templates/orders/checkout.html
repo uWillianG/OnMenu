@@ -1,16 +1,30 @@
 {% extends 'base.html' %}
 
-{% block title %}Finalizar pedido | OnMenu{% endblock %}
+{% block title %}{% if resume_order %}Pagar pedido {{ resume_order.order_number }}{% else %}Finalizar pedido{% endif %} | OnMenu{% endblock %}
 
 {% block content %}
 <div class="page-content">
-  <h1 class="page-title">Finalizar pedido</h1>
-  <p class="page-lead">Só falta escolher como receber e pagar. Confira os detalhes do seu pedido.</p>
+  <h1 class="page-title">{% if resume_order %}Pagar pedido {{ resume_order.order_number }}{% else %}Finalizar pedido{% endif %}</h1>
+  <p class="page-lead">{% if resume_order %}Seu pedido já está registrado. Conclua o pagamento ou escolha outro meio.{% else %}Só falta escolher como receber e pagar. Confira os detalhes do seu pedido.{% endif %}</p>
+  {% if resume_order %}
+  <p id="payment-progress" role="status" data-state-url="{% url 'orders:payment_state' resume_order.order_number %}">Pagamento: {{ resume_order.get_payment_status_display }}.</p>
+  {% if available_payment_methods %}
+  <details class="detail-card"><summary>Usar outro meio de pagamento</summary>
+    <form method="post" action="{% url 'orders:payment_change' resume_order.order_number %}">{% csrf_token %}
+      <label>Meio de pagamento <select class="form-select" name="payment_method">{% for value,label in available_payment_methods %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+      <label>CPF, se escolher Pix <input class="form-input" name="customer_cpf" inputmode="numeric" maxlength="14" value="{{ resume_order.customer_cpf }}"></label>
+      <button class="btn-secondary">Trocar meio de pagamento</button>
+    </form>
+  </details>
+  {% endif %}
+  {% endif %}
 
   <div class="checkout-layout">
 
-    <form method="post" class="checkout-form" id="checkout-form-main">
+    <form method="post" class="checkout-form" id="checkout-form-main" {% if resume_order %}data-payment-resume="true"{% endif %} data-mock-allowed="{{ payment_mock_allowed|yesno:'true,false' }}">
       {% csrf_token %}
+      <input type="hidden" name="checkout_token" value="{{ checkout_token }}">
+      <input type="hidden" name="expected_total" id="expected-total" value="{{ estimated_total|stringformat:'s' }}">
 
       <section class="checkout-card">
         <div class="checkout-card-head"><span class="checkout-card-icon ico-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>Tipo de entrega</div>
@@ -32,25 +46,33 @@
 
         <div class="form-field">
           <label class="form-label" for="{{ form.customer_name.id_for_label }}">Nome completo</label>
-          <input class="form-input" id="{{ form.customer_name.id_for_label }}" type="text" name="customer_name"
+          <input class="form-input" id="{{ form.customer_name.id_for_label }}" type="text" name="customer_name" {% if resume_order %}disabled{% endif %}
             value="{{ form.customer_name.value|default:'' }}" autocomplete="name" placeholder="Ex: João da Silva">
           {% if form.customer_name.errors %}<ul class="errorlist">{% for e in form.customer_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
 
         <div class="form-field">
           <label class="form-label" for="{{ form.phone.id_for_label }}">Telefone / WhatsApp</label>
-          <input class="form-input" id="{{ form.phone.id_for_label }}" type="tel" name="phone"
+          <input class="form-input" id="{{ form.phone.id_for_label }}" type="tel" name="phone" {% if resume_order %}disabled{% endif %}
             value="{{ form.phone.value|default:'' }}" autocomplete="tel" placeholder="Ex: (11) 99999-0000">
           {% if form.phone.errors %}<ul class="errorlist">{% for e in form.phone.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
 
         <div id="pix-fields" hidden>
           <div class="form-field">
+            <label class="form-label" for="{{ form.customer_email.id_for_label }}">E-mail para o comprovante</label>
+            {{ form.customer_email }}{{ form.customer_email.errors }}
+          </div>
+          <div class="form-field">
             <label class="form-label" for="{{ form.customer_cpf.id_for_label }}">CPF <span class="form-label-opt">(para o Pix)</span></label>
             {{ form.customer_cpf }}
             {% if form.customer_cpf.errors %}<ul class="errorlist">{% for e in form.customer_cpf.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
           </div>
         </div>
+        {% if not resume_order and whatsapp_available %}
+        <label class="form-field"><span>{{ form.whatsapp_opt_in }} Quero receber atualizações deste pedido no WhatsApp de {{ restaurant.name }}.</span></label>
+        <p class="auth-help">Opcional. Você pode acompanhar o pedido pelo site e desativar os avisos a qualquer momento. <a href="{% url 'menu:privacy' %}">Privacidade</a>.</p>
+        {% endif %}
       </section>
 
       <section class="checkout-card" id="address-section">
@@ -100,7 +122,7 @@
       <section class="checkout-card">
         <div class="checkout-card-head"><span class="checkout-card-icon ico-violet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>Observações</div>
         <div class="form-field">
-          <textarea class="form-textarea" id="{{ form.notes.id_for_label }}" name="notes"
+          <textarea class="form-textarea" id="{{ form.notes.id_for_label }}" name="notes" {% if resume_order %}disabled{% endif %}
             placeholder="Alguma observação? Ex: sem cebola, troco para R$ 50…">{{ form.notes.value|default:'' }}</textarea>
         </div>
       </section>
@@ -157,6 +179,7 @@
     <aside class="checkout-summary"
            data-subtotal="{{ subtotal|floatformat:2 }}"
            data-currency="{{ currency_symbol }}"
+           {% if resume_order %}data-fixed-total="{{ estimated_total|floatformat:2 }}" data-fixed-fee="{{ delivery_fee|floatformat:2 }}"{% endif %}
            {% if restaurant.free_delivery_above is not None %}data-free-delivery-above="{{ restaurant.free_delivery_above|floatformat:2 }}"{% endif %}>
       <div class="cart-summary-panel">
         <div class="summary-title">Resumo do pedido</div>
@@ -285,6 +308,10 @@
         <div class="pix-spinner" aria-hidden="true"></div>
         <p class="pix-muted">Processando pagamento…</p>
       </div>
+      <div class="pix-state" data-card-state="challenge" hidden>
+        <p>Confirme o pagamento com seu banco.</p>
+        <div id="card-status-screen"></div>
+      </div>
 
       <!-- Estado: aprovado -->
       <div class="pix-state" data-card-state="approved" hidden>
@@ -315,9 +342,34 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ resume_card_context|json_script:"resume-card-context" }}
+{{ resume_attempt|json_script:"resume-card-attempt" }}
+<script>
+(function(){
+  const progress = document.getElementById('payment-progress');
+  if (!progress) return;
+  function poll(){fetch(progress.dataset.stateUrl).then(function(r){return r.json();}).then(function(data){
+    if (data.paid || data.cancelled) {window.location.href=data.confirmation_url;return;}
+    if (data.attempt_status === 'uncertain' || data.attempt_status === 'creating') progress.textContent='Estamos verificando o pagamento. Aguarde; nenhuma nova cobrança será solicitada enquanto isso.';
+    else if (data.attempt_status === 'in_process') progress.textContent='Pagamento em análise pelo provedor.';
+    setTimeout(poll,5000);
+  }).catch(function(){setTimeout(poll,5000);});}
+  setTimeout(poll,5000);
+})();
+</script>
 <script src="https://sdk.mercadopago.com/js/v2"></script>
 <script>
 (function () {
+  document.addEventListener('checkout-order-created', function(event){
+    const mainForm = document.getElementById('checkout-form-main');
+    if (!mainForm) return;
+    const data = event.detail || {};
+    mainForm.querySelectorAll('[name=customer_name], [name=customer_email], [name=phone], [name=customer_cpf], [name=fulfillment_method], [name=payment_method], [name=city], [name=neighborhood], [name=address_street], [name=address_number], [name=address_complement], [name=notes], [name=whatsapp_opt_in]').forEach(function(field){field.disabled=true;});
+    const summary = document.querySelector('.checkout-summary');
+    if (summary && data.amount) {summary.dataset.fixedTotal=data.amount;summary.dataset.fixedFee=data.delivery_fee||'0';}
+    const selected = mainForm.querySelector('[name=fulfillment_method]:checked');
+    if (selected) selected.dispatchEvent(new Event('change'));
+  });
   const dataEl = document.getElementById('delivery-data');
   const AREAS  = dataEl ? JSON.parse(dataEl.textContent) : {};
 
@@ -369,6 +421,15 @@
   }
 
   function update() {
+    if (summary && summary.dataset.fixedTotal) {
+      if (totalEl) totalEl.textContent = money(num(summary.dataset.fixedTotal));
+      if (ctaTotal) ctaTotal.textContent = money(num(summary.dataset.fixedTotal));
+      const expected = document.getElementById('expected-total');
+      if (expected) expected.value = num(summary.dataset.fixedTotal).toFixed(2);
+      if (delVal) delVal.textContent = CURRENCY + ' ' + money(num(summary.dataset.fixedFee));
+      if (section) section.style.display = isPickup() ? 'none' : '';
+      return;
+    }
     const pickup = isPickup();
     if (section) section.style.display = pickup ? 'none' : '';
     if (delRow)  delRow.style.display  = pickup ? 'none' : '';
@@ -393,6 +454,8 @@
         : (freeShipping ? 'Grátis' : CURRENCY + ' ' + money(fee));
     }
     const total = subtotal + fee;
+    const expected = document.getElementById('expected-total');
+    if (expected) expected.value = total.toFixed(2);
     if (totalEl)  totalEl.textContent  = money(total);
     if (ctaTotal) ctaTotal.textContent = money(total);
     if (cartBtn)  cartBtn.textContent  = CURRENCY + ' ' + money(total);
@@ -537,6 +600,7 @@
 
   // ----- Render da cobrança -----
   function renderCharge(data) {
+    document.dispatchEvent(new CustomEvent('checkout-order-created', {detail:data}));
     currentOrder = data.order_number;
     const img = document.getElementById('pix-qr-img');
     if (img) img.src = 'data:image/png;base64,' + (data.qrCodeBase64 || '');
@@ -563,7 +627,7 @@
       const m = String(Math.floor(left / 60)).padStart(2, '0');
       const s = String(left % 60).padStart(2, '0');
       if (timerEl) timerEl.textContent = m + ':' + s;
-      if (left <= 0) { stopTimer(); stopPolling(); showState('expired'); }
+      if (left <= 0) { stopTimer(); showState('expired'); }
     }
     tick();
     tickTimer = setInterval(tick, 1000);
@@ -709,6 +773,7 @@
   const mockForm  = document.getElementById('card-mock-form');
 
   let attempts = 0;
+  let currentCardContext = JSON.parse(document.getElementById('resume-card-context').textContent || 'null');
   let brick = null;           // controlador do Brick (para destruir/remontar)
   let mountedAmount = null;    // valor com que o Brick foi montado
 
@@ -780,6 +845,7 @@
     } else {
       section.hidden = true;
       if (submitBtn) submitBtn.style.display = '';
+      if (submitBtn) submitBtn.disabled = false;
       destroyBrick();
     }
   }
@@ -791,7 +857,11 @@
       mountBrick();
     } else {
       container.hidden = true;
-      mockForm.hidden = false;
+      mockForm.hidden = form.dataset.mockAllowed !== 'true';
+      if (mockForm.hidden) {
+        if (submitBtn) submitBtn.disabled = true;
+        openModal(); fatal('O pagamento com cartão está indisponível. Atualize a página para tentar novamente.');
+      }
     }
   }
 
@@ -830,7 +900,9 @@
             });
           }
         }
-      }).then(function (controller) { brick = controller; });
+      }).then(function (controller) { brick = controller; }).catch(function(){
+        openModal(); fatal('Não foi possível iniciar o cartão. Escolha outro meio de pagamento ou atualize a página.');
+      });
     } catch (e) {
       openModal(); fatal('Não foi possível iniciar o pagamento com cartão.');
     }
@@ -922,6 +994,8 @@
     openModal();
     showCardState('processing');
 
+    if (currentCardContext) return processCard(currentCardContext, cardData);
+
     return fetch(form.action || window.location.href, {
       method: 'POST',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -940,7 +1014,9 @@
           fatal(res.data.error);
           throw new Error('checkout_failed');
         }
-        return processCard(res.data, cardData);
+        currentCardContext = res.data;
+        document.dispatchEvent(new CustomEvent('checkout-order-created', {detail:res.data}));
+        return processCard(currentCardContext, cardData);
       })
       .catch(function (err) {
         if (!err || (err.message !== 'checkout_invalid' && err.message !== 'checkout_failed')) {
@@ -972,7 +1048,7 @@
       .then(function (res) {
         if (!res.ok) { fatal(res.error); return; }
         if (res.requires_action && res.redirect_url) {
-          window.location.href = res.redirect_url; return;
+          showChallenge(res); return;
         }
         if (res.status === 'approved') {
           showCardState('approved');
@@ -989,6 +1065,26 @@
         }
       })
       .catch(function () { fatal(); });
+  }
+
+  function showChallenge(res) {
+    showCardState('challenge');
+    if (!PUBLIC_KEY || typeof window.MercadoPago === 'undefined' || !res.creq) {
+      fatal('Não foi possível abrir a confirmação do banco. Retome o pagamento pelo seu pedido.');
+      return;
+    }
+    new window.MercadoPago(PUBLIC_KEY, {locale:'pt-BR'}).bricks().create('statusScreen', 'card-status-screen', {
+      initialization: {paymentId:res.paymentId, additionalInfo:{externalResourceURL:res.redirect_url, creq:res.creq}},
+      callbacks: {onReady:function(){}, onError:function(){fatal('Não foi possível abrir a confirmação do banco.');}}
+    }).catch(function(){fatal('Não foi possível abrir a confirmação do banco.');});
+    function pollChallenge() {
+      fetch('/orders/card/' + encodeURIComponent(res.paymentId) + '/status/').then(function(r){return r.json();}).then(function(data){
+        if (data.paid) window.location.href = data.confirmation_url;
+        else if (data.rejected) showRejected('Pagamento não aprovado pelo banco.');
+        else if (!modal.hidden) setTimeout(pollChallenge, 5000);
+      }).catch(function(){if (!modal.hidden) setTimeout(pollChallenge, 5000);});
+    }
+    setTimeout(pollChallenge, 5000);
   }
 
   function showRejected(message) {
@@ -1041,6 +1137,8 @@
   }
 
   togglePaymentUI();
+  const resumed = JSON.parse(document.getElementById('resume-card-attempt').textContent || 'null');
+  if (resumed && resumed.requires_action) { openModal(); showChallenge(resumed); }
 })();
 </script>
 {% endblock %}

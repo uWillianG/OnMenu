@@ -5,6 +5,9 @@ from . import views
 app_name = 'menu'
 
 urlpatterns = [
+    path('privacidade/', views.privacy, name='privacy'),
+    path('termos/', views.terms, name='terms'),
+    path('staff/configurar/', views.setup_restaurant, name='setup_restaurant'),
     path('', views.menu_list, name='menu_list'),
     path('informacoes/', views.restaurant_info, name='restaurant_info'),
     path('informacoes/editar/', views.edit_restaurant_info, name='edit_restaurant_info'),

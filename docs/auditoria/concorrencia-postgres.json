@@ -1,0 +1,15 @@
+{
+  "banco": "PostgreSQL 16",
+  "threads": 2,
+  "checkout_status": [
+    200,
+    200
+  ],
+  "pedidos": 1,
+  "pagamentos_status": [
+    200,
+    409
+  ],
+  "cobrancas_solicitadas": 1,
+  "tentativas_preservadas": 1
+}

@@ -2,11 +2,16 @@ from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
 from . import views
+from . import data_views
 from .forms import StyledPasswordResetForm, StyledSetPasswordForm
 
 app_name = 'accounts'
 
 urlpatterns = [
+    path('perfil/exportar/', data_views.export_data, name='export_data'),
+    path('perfil/excluir/', data_views.request_deletion, name='request_deletion'),
+    path('staff/privacidade/', data_views.staff_data_requests, name='staff_data_requests'),
+    path('staff/privacidade/<uuid:request_id>/concluir/', data_views.complete_deletion, name='complete_deletion'),
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('signup/', views.signup, name='signup'),

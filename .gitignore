@@ -22,6 +22,10 @@ db.sqlite3-journal
 /media/
 /staticfiles/
 /backups/
+/django-secret
+/.audit-tmp/
+db.sqlite3-wal
+db.sqlite3-shm
 local_settings.py
 
 # ── Environment / secrets ───────────────────────────────────

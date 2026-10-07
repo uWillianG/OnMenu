@@ -7,6 +7,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -21,6 +24,8 @@ from ..forms import OrderStatusForm
 from ..models import Order
 from ..services import notificacoes as notificacoes_service
 from ..services import pedidos as pedidos_service
+from ..services import payments as payment_service
+from ..services.status import change_status
 from ..services import whatsapp as whatsapp_service
 
 # Pedidos finalizados por página. Os ativos não paginam: são a fila de trabalho
@@ -28,7 +33,7 @@ from ..services import whatsapp as whatsapp_service
 STAFF_FINISHED_PAGE_SIZE = 20
 
 
-def _staff_orders_signature(active_orders, inactive_orders, finished_total):
+def _staff_orders_signature(active_orders, inactive_orders, finished_total, waiting_orders=()):
     """Assinatura leve do estado atual do painel.
 
     Muda quando um pedido novo chega, quando um status muda ou quando um pedido
@@ -37,7 +42,8 @@ def _staff_orders_signature(active_orders, inactive_orders, finished_total):
     de finalizados entra para que uma mudança fora da página atual (que altera a
     contagem) também dispare a atualização.
     """
-    parts = [f'{o.order_number}:{o.status}' for o in active_orders + inactive_orders]
+    parts = [f'{o.order_number}:{o.status}:{o.payment_status}:{o.updated_at.isoformat()}'
+             for o in list(active_orders) + list(inactive_orders) + list(waiting_orders)]
     parts.sort()
     parts.append(f'total:{finished_total}')
     return hashlib.md5('|'.join(parts).encode()).hexdigest()
@@ -77,7 +83,10 @@ def _staff_orders_context(request):
     # Duas consultas indexadas em vez de carregar a tabela inteira e separar em
     # Python: a lista de finalizados cresce para sempre, e este mesmo caminho é
     # percorrido pelo polling do painel a cada poucos segundos.
-    active_orders = list(orders.filter(status__in=Order.ACTIVE_STATUSES))
+    ready = Q(payment_status__in=Order.PAID_STATUSES) | Q(payment_method__in=[
+        Order.PaymentMethod.CASH, Order.PaymentMethod.CARD_ON_DELIVERY])
+    active_orders = list(orders.filter(status__in=Order.ACTIVE_STATUSES).filter(ready))
+    waiting_orders = list(orders.filter(status__in=Order.ACTIVE_STATUSES).exclude(ready))
     finished_page = Paginator(
         # created_at não é único; o id desempata para a paginação não repetir
         # nem pular pedidos criados no mesmo instante.
@@ -89,6 +98,8 @@ def _staff_orders_context(request):
 
     return {
         'active_orders': active_orders,
+        'waiting_orders': waiting_orders,
+        'waiting_count': len(waiting_orders),
         'inactive_orders': inactive_orders,
         'active_count': len(active_orders),
         'inactive_count': finished_total,
@@ -105,7 +116,7 @@ def _staff_orders_context(request):
         'payment_choices': Order.PaymentMethod.choices,
         'fulfillment_choices': Order.FulfillmentMethod.choices,
         'orders_signature': _staff_orders_signature(
-            active_orders, inactive_orders, finished_total,
+            active_orders, inactive_orders, finished_total, waiting_orders,
         ),
     }
 
@@ -177,6 +188,10 @@ def staff_orders_feed(request):
         'ok': True,
         'signature': ctx['orders_signature'],
         'active_count': ctx['active_count'],
+        'waiting_count': ctx['waiting_count'],
+        'waiting_html': render_to_string('orders/_staff_order_cards.html',
+            {'orders': ctx['waiting_orders'], 'empty_title': 'Nenhum pagamento pendente',
+             'empty_text': 'Pedidos online aguardando pagamento aparecem aqui.'}, request=request),
         'inactive_count': ctx['inactive_count'],
         'active_html': active_html,
         'inactive_html': inactive_html,
@@ -227,7 +242,8 @@ def staff_order_print(request, order_number):
 def staff_orders_print_active(request):
     """Página de impressão de todos os pedidos ativos (em andamento)."""
     orders = _orders_for_print(
-        Order.objects.filter(status__in=Order.ACTIVE_STATUSES)
+        Order.objects.filter(status__in=Order.ACTIVE_STATUSES).filter(
+            Q(payment_status__in=Order.PAID_STATUSES) | Q(payment_method__in=['cash', 'card_on_delivery']))
     )
     variant = _print_variant(request)
     return render(
@@ -266,14 +282,23 @@ def staff_orders_bulk_update(request):
         messages.warning(request, 'Selecione ao menos um pedido.')
     else:
         selected = Order.objects.filter(order_number__in=order_numbers)
-        # Notifica apenas os pedidos cuja situação realmente muda.
+        if new_status == Order.Status.CANCELLED and selected.filter(payment_status__in=Order.PAID_STATUSES, payment_method__in=['pix','credit_card']).exists():
+            messages.warning(request, 'Cancele pedidos pagos pela tela de detalhe para confirmar o estorno individual.')
+            return redirect('orders:staff_order_list')
+        if new_status in (Order.Status.PREPARING, Order.Status.OUT_FOR_DELIVERY, Order.Status.DELIVERED):
+            blocked = selected.filter(payment_method__in=['pix', 'credit_card']).exclude(payment_status__in=Order.PAID_STATUSES)
+            if blocked.exists():
+                messages.warning(request, 'Aguarde o pagamento online antes de avançar esses pedidos.')
+                return redirect('orders:staff_order_list')
         changed = list(selected.exclude(status=new_status))
-        updated = selected.update(status=new_status, updated_at=timezone.now())
-        for order in changed:
-            previous_status = order.status
-            order.status = new_status
-            pedidos_service.registrar_status(order, previous_status, request.user)
-            notificacoes_service.notificar_status_pedido(order)
+        try:
+            with transaction.atomic():
+                for order in changed:
+                    change_status(order, new_status, request.user)
+        except ValidationError as exc:
+            messages.warning(request, exc.messages[0])
+            return redirect('orders:staff_order_list')
+        updated = len(changed)
         label = Order.Status(new_status).label
         messages.success(
             request,
@@ -306,13 +331,16 @@ def staff_order_detail(request, order_number):
     if request.method == 'POST':
         form = OrderStatusForm(request.POST, instance=order)
         if form.is_valid():
-            form.save()
-            if order.status != previous_status:
-                pedidos_service.registrar_status(order, previous_status, request.user)
-                notificacoes_service.notificar_status_pedido(order)
-            messages.success(request, f'Status do pedido {order.order_number} atualizado.')
-            url = reverse('orders:staff_order_detail', args=[order.order_number])
-            return redirect(f'{url}?updated=1')
+            try:
+                order, changed = change_status(order, form.cleaned_data['status'], request.user,
+                    confirm_refund=request.POST.get('confirm_refund') == 'on', resolve_pending_pix=True)
+            except ValidationError as exc:
+                order.refresh_from_db()
+                form.add_error('status', exc.messages[0])
+            else:
+                messages.success(request, f'Status do pedido {order.order_number} atualizado.')
+                url = reverse('orders:staff_order_detail', args=[order.order_number])
+                return redirect(f'{url}?updated=1')
     else:
         form = OrderStatusForm(instance=order)
 
@@ -322,9 +350,36 @@ def staff_order_detail(request, order_number):
         {
             'order': order,
             'form': form,
+            'payment_attempts': order.payment_attempts.all(),
+            'can_refund': order.is_paid and order.requires_online_payment and request.user.has_perm('orders.refund_payment'),
             'wa_customer_url': whatsapp_service.montar_link_wame(
                 order.phone, notificacoes_service.mensagem_status(order)
             ),
             'WHATSAPP_MOCK': settings.WHATSAPP_MOCK,
         },
     )
+
+
+@staff_member_required
+@require_http_methods(['POST'])
+def staff_order_refund(request, order_number):
+    order = get_object_or_404(Order, order_number=order_number)
+    if not request.user.has_perm('orders.refund_payment'):
+        messages.error(request, 'Você não tem permissão para estornar pagamentos.')
+    elif request.POST.get('confirm_refund') != 'on':
+        messages.warning(request, 'Confirme o estorno integral antes de continuar.')
+    else:
+        try:
+            with payment_service.locked_order(order.pk) as current:
+                payment_service.ensure_legacy_attempts(current)
+                if not current.requires_online_payment:
+                    raise payment_service.PaymentError('O estorno online se aplica somente a pagamentos Pix ou cartão online.')
+                if not current.is_paid and current.payment_status != 'refunded':
+                    raise payment_service.PaymentError('Não há pagamento confirmado para estornar.')
+            current, changed = change_status(current, 'cancelled', request.user, confirm_refund=True)
+            if not changed:
+                payment_service.refund(current)
+            messages.success(request, 'Estorno solicitado e registrado.')
+        except ValidationError as exc:
+            messages.warning(request, exc.messages[0])
+    return redirect('orders:staff_order_detail', order_number=order.order_number)

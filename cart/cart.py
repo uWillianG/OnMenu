@@ -1,15 +1,26 @@
 import hashlib
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 from menu.models import ComplementChoice, MenuItem
+from .validators import validate_quantity
 
 
 class Cart:
     def __init__(self, request):
         self.session = request.session
         self.cart = self.session.get(settings.CART_SESSION_ID, {})
+
+    @property
+    def checkout_token(self):
+        token = self.session.get('checkout_token')
+        if not token:
+            token = str(uuid.uuid4())
+            self.session['checkout_token'] = token
+        return token
 
     # ── Identidade da linha ────────────────────────────────────────────────
     # Uma "linha" do carrinho é única por item + complementos/extras +
@@ -130,6 +141,11 @@ class Cart:
 
         existing = self.cart.get(key)
         existing_qty = self._entry(existing, key)['qty'] if existing else 0
+        validate_quantity(existing_qty + quantity)
+        if len(notes) > 300:
+            raise ValidationError('Use até 300 caracteres nas observações de cada item.')
+        if not existing and len(self.cart) >= 100:
+            raise ValidationError('Seu carrinho atingiu o limite de produtos diferentes.')
 
         self.cart[key] = {
             'item_id': item_id,
@@ -152,8 +168,14 @@ class Cart:
         mescla a quantidade caso a nova configuração coincida com outra linha já
         existente no carrinho.
         """
-        self.remove(line_id)
-        self.add(item, quantity=quantity, options=options, notes=notes)
+        previous = self.cart.copy()
+        try:
+            self.remove(line_id)
+            self.add(item, quantity=quantity, options=options, notes=notes)
+        except ValidationError:
+            self.cart = previous
+            self.save()
+            raise
 
     def set_quantity(self, line_id, quantity):
         """Define a quantidade de uma linha específica (remove se <= 0)."""
@@ -162,6 +184,7 @@ class Cart:
         if quantity <= 0:
             del self.cart[line_id]
         else:
+            validate_quantity(quantity)
             entry = self._entry(self.cart[line_id], line_id)
             self.cart[line_id] = {
                 'item_id': entry['item_id'],
@@ -182,8 +205,10 @@ class Cart:
             del self.session[settings.CART_SESSION_ID]
             self.session.modified = True
         self.cart = {}
+        self.session.pop(settings.CART_SESSION_ID + '_subtotal', None)
 
     def save(self):
+        self.session['checkout_token'] = str(uuid.uuid4())
         self.session[settings.CART_SESSION_ID] = self.cart
         self.session[settings.CART_SESSION_ID + '_subtotal'] = str(self.subtotal)
         self.session.modified = True

@@ -1,4 +1,5 @@
 import re
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
@@ -113,8 +114,11 @@ class Order(models.Model):
         PENDING = 'pending', 'Pendente'
         IN_PROCESS = 'in_process', 'Em análise'
         PAID = 'paid', 'Pago'
+        PARTIALLY_REFUNDED = 'partially_refunded', 'Estornado parcialmente'
         REJECTED = 'rejected', 'Recusado'
         CANCELLED = 'cancelled', 'Cancelado'
+        REFUNDED = 'refunded', 'Estornado'
+        CHARGED_BACK = 'charged_back', 'Contestado'
 
     # Pedidos "ativos" ainda estão em andamento (na fila da cozinha/entrega);
     # os demais (entregue/cancelado) são considerados finalizados/inativos.
@@ -123,6 +127,7 @@ class Order(models.Model):
         Status.PREPARING,
         Status.OUT_FOR_DELIVERY,
     )
+    PAID_STATUSES = (PaymentStatus.PAID, PaymentStatus.PARTIALLY_REFUNDED)
 
     restaurant = models.ForeignKey(
         Restaurant,
@@ -145,8 +150,10 @@ class Order(models.Model):
         editable=False,
         blank=True,
     )
+    checkout_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
     customer_name = models.CharField(max_length=120)
     phone = models.CharField(max_length=40)
+    whatsapp_opt_in = models.BooleanField(default=False)
     # Coletados quando o pagamento é Pix (exigidos pela API do Mercado Pago).
     customer_email = models.EmailField('E-mail', blank=True)
     customer_cpf = models.CharField('CPF', max_length=14, blank=True)
@@ -200,6 +207,7 @@ class Order(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        permissions = [('refund_payment', 'Pode estornar pagamentos online')]
         # A tabela de pedidos só cresce. Sem estes índices, o painel (filtra por
         # situação), os relatórios (varrem faixas de data) e o histórico do
         # cliente (filtra por conta) viram varredura completa com o tempo.
@@ -224,7 +232,22 @@ class Order(models.Model):
     @property
     def is_paid(self):
         """Pagamento já confirmado (não há valor a cobrar na entrega)."""
-        return self.payment_status == self.PaymentStatus.PAID
+        return self.payment_status in (self.PaymentStatus.PAID, self.PaymentStatus.PARTIALLY_REFUNDED)
+
+    @property
+    def requires_online_payment(self):
+        return self.payment_method in (self.PaymentMethod.PIX, self.PaymentMethod.CREDIT_CARD)
+
+    @property
+    def can_prepare(self):
+        return not self.requires_online_payment or self.is_paid
+
+    @property
+    def can_pay(self):
+        return (self.status == self.Status.RECEIVED and self.requires_online_payment
+                and self.payment_status not in (self.PaymentStatus.PAID,
+                    self.PaymentStatus.PARTIALLY_REFUNDED,
+                    self.PaymentStatus.REFUNDED, self.PaymentStatus.CHARGED_BACK))
 
     def label_for_status(self, status):
         """Rótulo do status conforme o método de entrega.
@@ -400,6 +423,8 @@ class PixPayment(models.Model):
         APPROVED = 'approved', 'Aprovado'
         CANCELLED = 'cancelled', 'Cancelado'
         EXPIRED = 'expired', 'Expirado'
+        REFUNDED = 'refunded', 'Estornado'
+        CHARGED_BACK = 'charged_back', 'Contestado'
 
     order = models.OneToOneField(
         Order,
@@ -451,6 +476,7 @@ class CardPayment(models.Model):
         REJECTED = 'rejected', 'Recusado'
         CANCELLED = 'cancelled', 'Cancelado'
         REFUNDED = 'refunded', 'Estornado'
+        CHARGED_BACK = 'charged_back', 'Contestado'
 
     order = models.OneToOneField(
         Order,
@@ -479,6 +505,60 @@ class CardPayment(models.Model):
 
     def __str__(self):
         return f'Cartão {self.external_reference} ({self.get_status_display()})'
+
+
+class PaymentAttempt(models.Model):
+    """Registro imutável da identidade de uma tentativa; não armazena cartão/token."""
+
+    class Status(models.TextChoices):
+        CREATING = 'creating', 'Solicitando pagamento'
+        UNCERTAIN = 'uncertain', 'Verificando pagamento'
+        PENDING = 'pending', 'Pendente'
+        IN_PROCESS = 'in_process', 'Em análise'
+        APPROVED = 'approved', 'Aprovado'
+        REJECTED = 'rejected', 'Recusado'
+        CANCELLED = 'cancelled', 'Cancelado'
+        EXPIRED = 'expired', 'Expirado'
+        REFUNDED = 'refunded', 'Estornado'
+        CHARGED_BACK = 'charged_back', 'Contestado'
+        FAILED = 'failed', 'Não iniciado'
+
+    BUSY_STATUSES = (Status.CREATING, Status.UNCERTAIN, Status.PENDING, Status.IN_PROCESS)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='payment_attempts')
+    method = models.CharField(max_length=30, choices=Order.PaymentMethod.choices)
+    fingerprint = models.CharField(max_length=64, blank=True, editable=False)
+    external_reference = models.CharField(max_length=64, unique=True, editable=False)
+    mp_payment_id = models.CharField(max_length=64, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CREATING)
+    status_detail = models.CharField(max_length=80, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    response_data = models.JSONField(default=dict, blank=True)
+    refund_requested_at = models.DateTimeField(null=True, blank=True, editable=False)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    requested_refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    last_checked_at = models.DateTimeField(null=True, blank=True, editable=False)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', 'created_at'], name='attempt_status_created_idx')]
+        constraints = [
+            models.UniqueConstraint(fields=['order', 'method', 'fingerprint'],
+                condition=~models.Q(fingerprint=''), name='unique_payment_fingerprint'),
+            models.UniqueConstraint(fields=['mp_payment_id'], condition=~models.Q(mp_payment_id=''),
+                name='unique_attempt_mp_id'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.external_reference:
+            self.external_reference = f'{self.order.order_number}-{self.pk.hex}'
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'{self.order.order_number} — {self.get_status_display()}'
 
 
 class Notification(models.Model):
@@ -512,6 +592,34 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.message
+
+
+class WhatsAppMessage(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Aguardando envio'
+        SENDING = 'sending', 'Enviando'
+        SENT = 'sent', 'Enviada'
+        DELIVERED = 'delivered', 'Entregue'
+        READ = 'read', 'Lida'
+        FAILED = 'failed', 'Falhou'
+        UNCERTAIN = 'uncertain', 'Verificando envio'
+        SKIPPED = 'skipped', 'Não enviada'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='whatsapp_messages')
+    event_key = models.CharField(max_length=120, unique=True)
+    order_status = models.CharField(max_length=30, choices=Order.Status.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    provider_id = models.CharField(max_length=200, blank=True, db_index=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    last_error = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [models.Index(fields=['status', 'next_attempt_at'], name='whatsapp_pending_idx')]
 
 
 class OrderStatusChange(models.Model):

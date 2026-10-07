@@ -127,6 +127,11 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           </span> Horário de funcionamento
         </a>
+        <a class="sidebar-link" href="{% url 'menu:setup_restaurant' %}">Configurar estabelecimento</a>
+        <a class="sidebar-link" href="{% url 'orders:delivery_areas' %}">Regiões de entrega</a>
+        <a class="sidebar-link" href="{% url 'launch_status' %}">Preparação para lançamento</a>
+        <a class="sidebar-link" href="{% url 'orders:whatsapp_outbox' %}">Avisos de WhatsApp</a>
+        {% if perms.accounts.handle_data_request %}<a class="sidebar-link" href="{% url 'accounts:staff_data_requests' %}">Solicitações de privacidade</a>{% endif %}
         {% endif %}
       {% else %}
         <a class="sidebar-link {% if view == 'menu:menu_list' %}is-active{% endif %}" href="{% url 'menu:menu_list' %}">Cardápio</a>
@@ -178,6 +183,8 @@
   <footer class="site-footer">
     <a class="brand" href="{% url 'menu:menu_list' %}">OnMenu</a>
     <span>Seu próximo pedido começa aqui.</span>
+    <a href="{% url 'menu:privacy' %}">Privacidade</a>
+    <a href="{% url 'menu:terms' %}">Condições dos pedidos</a>
     <a href="{% url 'menu:restaurant_info' %}">Informações do restaurante <span aria-hidden="true">↗</span></a>
   </footer>
   {% endif %}

@@ -5,6 +5,9 @@ from urllib.parse import quote
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.contrib import messages
+from django.shortcuts import redirect
+from django.views.decorators.http import require_POST
 from django.shortcuts import render
 
 from ..models import Notification, Order
@@ -32,9 +35,12 @@ def confirmation(request, order_number):
         )
         if order.fulfillment_method == Order.FulfillmentMethod.DELIVERY and order.address:
             msg += f'\nEndereço: {order.address}'
-        wa_url = f'https://wa.me/{order.restaurant.whatsapp_number}?text={quote(msg)}'
+        from ..services.whatsapp import montar_link_wame
+        wa_url = montar_link_wame(order.restaurant.whatsapp_number, msg)
 
-    return render(request, 'orders/confirmation.html', {'order': order, 'wa_url': wa_url})
+    refund_pending = order.payment_attempts.filter(status='approved', refund_requested_at__isnull=False).exists()
+    return render(request, 'orders/confirmation.html', {'order': order, 'wa_url': wa_url,
+        'refund_pending':refund_pending})
 
 
 def track_order(request, order_number):
@@ -45,6 +51,16 @@ def track_order(request, order_number):
             'status_display': order.status_display,
         })
     return render(request, 'orders/track_order.html', {'order': order})
+
+
+@require_POST
+def stop_whatsapp(request, order_number):
+    order = get_own_order(request, order_number)
+    order.whatsapp_opt_in = False
+    order.save(update_fields=['whatsapp_opt_in', 'updated_at'])
+    order.whatsapp_messages.filter(status='pending').update(status='skipped')
+    messages.success(request, 'Avisos de WhatsApp desativados para este pedido.')
+    return redirect('orders:confirmation', order_number=order.order_number)
 
 
 @login_required

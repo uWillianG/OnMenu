@@ -4,11 +4,15 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.db.models import Prefetch
 from django.http import JsonResponse
+from django.conf import settings
+from django.db import transaction
+from django.db.models import F
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from cart.cart import Cart
 from orders.selectors import get_delivery_fee_range, get_tracked_active_orders
+from orders.services.whatsapp import formatar_numero
 
 from .forms import (
     CategoryForm,
@@ -18,7 +22,7 @@ from .forms import (
     RestaurantInfoForm,
     RestaurantLogoForm,
 )
-from .models import BusinessHours, Category, ComplementGroup, MenuItem
+from .models import BusinessHours, Category, ComplementGroup, MenuItem, Restaurant
 from .selectors import get_current_restaurant, get_open_status
 
 
@@ -73,7 +77,7 @@ def menu_list(request):
             )
         open_status = get_open_status(restaurant)
         delivery_fee, delivery_fee_from = _hero_delivery_fee(restaurant)
-        whatsapp_digits = ''.join(filter(str.isdigit, restaurant.whatsapp_number))
+        whatsapp_digits = formatar_numero(restaurant.whatsapp_number)
 
     return render(
         request,
@@ -103,7 +107,7 @@ def restaurant_info(request):
         return redirect('menu:menu_list')
 
     open_status = get_open_status(restaurant)
-    whatsapp_digits = ''.join(filter(str.isdigit, restaurant.whatsapp_number or ''))
+    whatsapp_digits = formatar_numero(restaurant.whatsapp_number)
     fee_range = get_delivery_fee_range()
 
     return render(
@@ -120,6 +124,32 @@ def restaurant_info(request):
             'has_fee_range': fee_range is not None,
         },
     )
+
+
+def privacy(request):
+    return render(request, 'menu/privacy.html', {'restaurant': get_current_restaurant() or {'name':'o estabelecimento'},
+        'retention_days': settings.CUSTOMER_DATA_RETENTION_DAYS})
+
+
+def terms(request):
+    return render(request, 'menu/terms.html', {'restaurant': get_current_restaurant()})
+
+
+@staff_member_required
+def setup_restaurant(request):
+    restaurant = get_current_restaurant()
+    if restaurant:
+        return redirect('menu:edit_restaurant_info')
+    form = RestaurantInfoForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            Restaurant.objects.filter(pk=-1).update(is_active=F('is_active'))
+            if get_current_restaurant():
+                return redirect('menu:edit_restaurant_info')
+            restaurant = form.save()
+        messages.success(request, 'Estabelecimento criado. Cadastre o cardápio, horários e regiões de entrega.')
+        return redirect('menu:manage_menu')
+    return render(request, 'menu/restaurant_info_form.html', {'form':form, 'restaurant':restaurant, 'setup':True})
 
 
 @staff_member_required

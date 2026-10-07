@@ -3,12 +3,15 @@ o pagamento (dinheiro/maquininha, Pix ou cartão). Inclui também a repetição 
 um pedido anterior, que remonta o carrinho e leva de volta ao checkout."""
 
 import logging
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -17,7 +20,9 @@ from django.views.decorators.http import require_http_methods
 from accounts import throttle
 
 from cart.cart import Cart
+from cart.validators import clean_options, is_sellable, validate_checkout_cart
 from menu.selectors import get_current_restaurant, is_restaurant_open
+from menu.models import Restaurant
 
 from .. import selectors
 from ..forms import CheckoutForm
@@ -25,6 +30,7 @@ from ..models import City, Order, OrderItem, OrderItemOption
 from ..services import mercadopago as mp_service
 from ..services import notificacoes as notificacoes_service
 from ..services import pedidos as pedidos_service
+from ..services import payments as payment_service
 from .payments import create_pix_for_order, pix_payload
 
 logger = logging.getLogger(__name__)
@@ -33,7 +39,27 @@ logger = logging.getLogger(__name__)
 @require_http_methods(['GET', 'POST'])
 def checkout(request):
     cart = Cart(request)
-    cart_items = cart.items
+    restaurant = get_current_restaurant()
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    checkout_key = cart.checkout_token
+    if request.method == 'POST':
+        submitted_key = request.POST.get('checkout_token') or checkout_key
+        if submitted_key != checkout_key:
+            return JsonResponse({'ok': False, 'error': 'Seu carrinho mudou. Atualize a página antes de confirmar.'}, status=409)
+        try:
+            uuid.UUID(submitted_key)
+        except ValueError:
+            return JsonResponse({'ok': False, 'error': 'Atualize a página para confirmar o pedido.'}, status=400)
+        previous = Order.objects.filter(checkout_key=submitted_key).first()
+        if previous:
+            return _checkout_response(request, previous, cart, is_ajax, created=False)
+    try:
+        cart_items = validate_checkout_cart(cart, restaurant)
+    except ValidationError as exc:
+        if request.method == 'POST' and is_ajax:
+            return JsonResponse({'ok': False, 'error': exc.messages[0]}, status=400)
+        messages.warning(request, exc.messages[0])
+        return redirect('cart:cart_detail')
 
     if not cart_items:
         messages.warning(request, 'Seu carrinho está vazio.')
@@ -47,9 +73,9 @@ def checkout(request):
         )
         return redirect('cart:cart_detail')
 
-    restaurant = get_current_restaurant() or cart_items[0]['item'].category.restaurant
-
     if is_restaurant_open(restaurant) is False:
+        if request.method == 'POST' and is_ajax:
+            return JsonResponse({'ok': False, 'error': 'O restaurante não está recebendo pedidos agora.'}, status=409)
         messages.warning(request, 'O restaurante está fechado no momento. Tente mais tarde.')
         return redirect('menu:menu_list')
 
@@ -66,56 +92,29 @@ def checkout(request):
             messages.error(request, msg)
             return redirect('cart:cart_detail')
         throttle.record(throttle.CHECKOUT, ip)
-        form = CheckoutForm(request.POST)
+        form = CheckoutForm(request.POST, restaurant=restaurant)
         if form.is_valid():
             # Só depois de validar o form dá para saber se é entrega ou retirada.
             minimo = _minimum_order_error(restaurant, form.cleaned_data, cart.subtotal)
             if minimo:
                 form.add_error('fulfillment_method', minimo)
         if form.is_valid():
-            order = _create_order_from_cart(
-                form=form,
-                cart=cart,
-                cart_items=cart_items,
-                restaurant=restaurant,
-                user=request.user if request.user.is_authenticated else None,
-            )
+            try:
+                order = _create_order_from_cart(form=form, cart=cart, cart_items=cart_items,
+                    restaurant=restaurant, user=request.user if request.user.is_authenticated else None,
+                    checkout_key=checkout_key)
+            except ValidationError as exc:
+                if is_ajax:
+                    return JsonResponse({'ok': False, 'error': exc.messages[0]}, status=400)
+                messages.warning(request, exc.messages[0])
+                return redirect('cart:cart_detail')
             # Guarda o pedido na sessão para o acompanhamento na tela principal.
-            selectors.remember_order(request, order)
-            cart.clear()
-            # Avisa os admins assim que o pedido é realizado. Pagamentos online
-            # (Pix/cartão) só avisam quando confirmados — ver pedidos.marcar_pago.
-            if order.payment_method not in (
-                Order.PaymentMethod.PIX,
-                Order.PaymentMethod.CREDIT_CARD,
-            ):
-                notificacoes_service.notificar_admins_novo_pedido(order)
-            # Pagamento Pix via modal: cria a cobrança e devolve o QR Code (JSON).
-            if order.payment_method == Order.PaymentMethod.PIX and is_ajax:
-                try:
-                    pix = create_pix_for_order(order)
-                except mp_service.PixError as exc:
-                    logger.exception('Falha ao criar cobrança Pix')
-                    return JsonResponse({'ok': False, 'error': str(exc)}, status=502)
-                return JsonResponse(pix_payload(pix, order))
-            # Cartão de crédito: o pedido é criado aqui; o pagamento ocorre depois
-            # que o Brick tokeniza o cartão e o frontend chama orders:card_pay.
-            if order.payment_method == Order.PaymentMethod.CREDIT_CARD and is_ajax:
-                return JsonResponse({
-                    'ok': True,
-                    'mode': 'card',
-                    'order_number': order.order_number,
-                    'amount': str(order.total),
-                    'public_key': settings.MERCADOPAGO_PUBLIC_KEY,
-                    'card_pay_url': reverse('orders:card_pay', args=[order.order_number]),
-                    'confirmation_url': reverse('orders:confirmation', args=[order.order_number]),
-                })
-            messages.success(request, f'Pedido {order.order_number} recebido.')
-            return redirect('orders:confirmation', order_number=order.order_number)
+            return _checkout_response(request, order, cart, is_ajax,
+                                      created=getattr(order, '_created_by_checkout', True))
         if is_ajax:
             return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
     else:
-        form = CheckoutForm(initial=_checkout_initial(request))
+        form = CheckoutForm(initial=_checkout_initial(request, restaurant), restaurant=restaurant)
 
     # Delivery fee is computed from the selected city + neighborhood, so it
     # starts at zero and is updated client-side as the customer chooses.
@@ -133,8 +132,39 @@ def checkout(request):
             'free_delivery_missing': restaurant.missing_for_free_delivery(cart.subtotal),
             'minimum_missing': restaurant.missing_for_minimum(cart.subtotal),
             'mercadopago_public_key': settings.MERCADOPAGO_PUBLIC_KEY,
+            'checkout_token': cart.checkout_token,
+            'payment_mock_allowed': settings.MERCADOPAGO_MOCK and settings.MERCADOPAGO_MOCK_ALLOWED,
+            'whatsapp_available': not settings.WHATSAPP_MOCK or settings.WHATSAPP_MOCK_ALLOWED,
         },
     )
+
+
+def _checkout_response(request, order, cart, is_ajax, created=True):
+    selectors.remember_order(request, order)
+    cart.clear()
+    if created and not order.requires_online_payment:
+        notificacoes_service.notificar_admins_novo_pedido(order)
+    if order.is_paid:
+        return JsonResponse({'ok': True, 'paid': True,
+            'confirmation_url': reverse('orders:confirmation', args=[order.order_number])}) if is_ajax else redirect('orders:confirmation', order_number=order.order_number)
+    if order.payment_method == Order.PaymentMethod.PIX and is_ajax:
+        try:
+            return JsonResponse(pix_payload(create_pix_for_order(order), order))
+        except payment_service.PaymentError as exc:
+            # 4xx mantém a sessão do cliente e o acesso ao pedido criado.
+            from .payments import _payment_error
+            return _payment_error(exc, order)
+    if order.payment_method == Order.PaymentMethod.CREDIT_CARD and is_ajax:
+        return JsonResponse({'ok': True, 'mode': 'card', 'order_number': order.order_number,
+            'amount': str(order.total), 'public_key': settings.MERCADOPAGO_PUBLIC_KEY,
+            'delivery_fee': str(order.delivery_fee),
+            'card_pay_url': reverse('orders:card_pay', args=[order.order_number]),
+            'confirmation_url': reverse('orders:confirmation', args=[order.order_number]),
+            'payment_url': reverse('orders:payment_resume', args=[order.order_number])})
+    if order.requires_online_payment:
+        return redirect('orders:payment_resume', order_number=order.order_number)
+    messages.success(request, f'Pedido {order.order_number} recebido.')
+    return redirect('orders:confirmation', order_number=order.order_number)
 
 
 def _money(value):
@@ -158,17 +188,20 @@ def _minimum_order_error(restaurant, cleaned_data, subtotal):
     )
 
 
-def _checkout_initial(request):
+def _checkout_initial(request, restaurant=None):
     """Pré-preenche o checkout com os dados salvos do cliente logado.
 
     Evita digitar de novo nome, telefone e endereço já cadastrados no perfil.
     """
     initial = {'fulfillment_method': Order.FulfillmentMethod.DELIVERY}
+    if restaurant and not restaurant.accepts_delivery and restaurant.accepts_pickup:
+        initial['fulfillment_method'] = Order.FulfillmentMethod.PICKUP
     user = request.user
     if not user.is_authenticated:
         return initial
 
     initial['customer_name'] = user.get_full_name() or user.get_username()
+    initial['customer_email'] = user.email
     profile = getattr(user, 'profile', None)
     if profile is not None:
         initial.update({
@@ -222,10 +255,14 @@ def repeat_order(request, order_number):
     skipped = []
     for order_item in order.items.all():
         item = order_item.menu_item
-        if item is None or not item.is_available:
+        if item is None or not is_sellable(item, get_current_restaurant()):
             skipped.append(order_item.item_name)
             continue
         options = _rebuild_item_options(item, order_item)
+        options, error = clean_options(item, options)
+        if error:
+            skipped.append(order_item.item_name)
+            continue
         cart.add(
             item,
             quantity=order_item.quantity,
@@ -275,11 +312,27 @@ def _rebuild_item_options(item, order_item):
 
 
 @transaction.atomic
-def _create_order_from_cart(form, cart, cart_items, restaurant, user=None):
+def _create_order_from_cart(form, cart, cart_items, restaurant, user=None, checkout_key=None):
+    # Também serializa a numeração e os preços lidos no SQLite/WAL.
+    Restaurant.objects.filter(pk=restaurant.pk).update(is_active=F('is_active'))
+    restaurant = get_current_restaurant()
+    cart_items = validate_checkout_cart(cart, restaurant)
+    method = form.cleaned_data['fulfillment_method']
+    if (method == 'delivery' and not restaurant.accepts_delivery) or (method == 'pickup' and not restaurant.accepts_pickup):
+        raise ValidationError('Esta modalidade não está mais disponível. Revise seu pedido.')
+    if checkout_key:
+        existing = Order.objects.filter(checkout_key=checkout_key).first()
+        if existing:
+            existing._created_by_checkout = False
+            return existing
     order = form.save(commit=False)
     order.restaurant = restaurant
     order.user = user
-    order.subtotal = cart.subtotal
+    order.checkout_key = checkout_key
+    order.subtotal = sum((entry['line_total'] for entry in cart_items), Decimal('0.00'))
+    minimum_error = _minimum_order_error(restaurant, form.cleaned_data, order.subtotal)
+    if minimum_error:
+        raise ValidationError(minimum_error)
 
     city = form.cleaned_data.get('city')
     neighborhood = form.cleaned_data.get('neighborhood')
@@ -293,12 +346,26 @@ def _create_order_from_cart(form, cart, cart_items, restaurant, user=None):
         )
         # Zera a taxa quando o carrinho passa do valor de frete grátis.
         order.delivery_fee = restaurant.delivery_fee_for(order.subtotal, base_fee)
+        if not Decimal('0.00') <= order.delivery_fee <= Decimal('9999.99'):
+            raise ValidationError('A taxa de entrega está inválida. Entre em contato com o restaurante.')
     else:
         order.address_city = ''
         order.address_neighborhood = ''
         order.delivery_fee = Decimal('0.00')
 
-    order.save()
+    expected = form.cleaned_data.get('expected_total')
+    if expected is not None and expected != order.subtotal + order.delivery_fee:
+        raise ValidationError('Os preços ou a taxa de entrega mudaram. Atualize a página e confira o total antes de pagar.')
+    try:
+        with transaction.atomic():
+            order.save()
+    except IntegrityError:
+        if checkout_key:
+            existing = Order.objects.filter(checkout_key=checkout_key).first()
+            if existing:
+                existing._created_by_checkout = False
+                return existing
+        raise
     pedidos_service.registrar_status(order, user=user)
 
     for entry in cart_items:
@@ -320,4 +387,5 @@ def _create_order_from_cart(form, cart, cart_items, restaurant, user=None):
                 extra_price=choice.extra_price,
             )
 
+    order._created_by_checkout = True
     return order

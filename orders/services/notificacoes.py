@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 
 from ..models import Notification
+from ..models import WhatsAppMessage
 from . import whatsapp as whatsapp_service
 
 logger = logging.getLogger(__name__)
@@ -63,10 +64,8 @@ def notificar_status_pedido(order) -> None:
         except Exception:  # noqa: BLE001 - não pode quebrar a ação do admin
             logger.exception('Falha ao criar notificação para o pedido %s', order.order_number)
 
-    # 2) WhatsApp (mock-safe).
-    try:
-        whatsapp_service.enviar_texto(order.phone, msg)
-    except whatsapp_service.WhatsAppError:
-        logger.warning('Falha ao enviar WhatsApp para o pedido %s', order.order_number)
-    except Exception:  # noqa: BLE001
-        logger.exception('Erro inesperado ao enviar WhatsApp para %s', order.order_number)
+    # 2) Fila durável. O worker envia templates aprovados sem segurar o painel.
+    if order.whatsapp_opt_in:
+        event_key = f'{order.pk}:{order.status}:{order.updated_at.isoformat()}'
+        WhatsAppMessage.objects.get_or_create(event_key=event_key,
+            defaults={'order': order, 'order_status': order.status})

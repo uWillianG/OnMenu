@@ -47,6 +47,10 @@ DEBUG = env_bool('DJANGO_DEBUG', True)
 # `python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"`).
 DEV_SECRET_KEY = 'django-insecure-(6au7gd2k8q&c18vabc9ek8w!%q=z=r!@s)$%x^#z2_5!aznac'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+PERSISTED_SECRET_PATH = Path(os.environ.get('DJANGO_PERSISTED_SECRET',
+    Path(os.environ.get('DJANGO_DATA_ROOT', BASE_DIR)) / 'django-secret'))
+if not SECRET_KEY and PERSISTED_SECRET_PATH.exists():
+    SECRET_KEY = PERSISTED_SECRET_PATH.read_text(encoding='utf-8').strip()
 if not SECRET_KEY:
     if not DEBUG:
         raise ImproperlyConfigured(
@@ -149,7 +153,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': Path(os.environ.get('DJANGO_SQLITE_PATH', BASE_DIR / 'db.sqlite3')),
             'OPTIONS': {
                 # WAL + espera no lock reduzem o "database is locked" quando dois
                 # pedidos chegam juntos.
@@ -209,7 +213,7 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 # Destino do `manage.py collectstatic` (o WhiteNoise serve a partir daqui).
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('DJANGO_MEDIA_ROOT', BASE_DIR / 'media'))
 
 STORAGES = {
     'default': {
@@ -228,6 +232,8 @@ STORAGES = {
 SERVE_MEDIA = env_bool('DJANGO_SERVE_MEDIA', False)
 
 CART_SESSION_ID = 'onmenu_cart'
+CART_MAX_QUANTITY = 99
+CART_MAX_SUBTOTAL = 100000
 CURRENCY_SYMBOL = 'R$'
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'orders:staff_order_list'
@@ -363,6 +369,12 @@ MERCADOPAGO_PUBLIC_KEY = os.environ.get('MERCADOPAGO_PUBLIC_KEY', '')
 MERCADOPAGO_WEBHOOK_SECRET = os.environ.get('MERCADOPAGO_WEBHOOK_SECRET', '')
 # Mock ligado automaticamente quando não há token configurado.
 MERCADOPAGO_MOCK = not MERCADOPAGO_ACCESS_TOKEN
+MERCADOPAGO_MOCK_ALLOWED = DEBUG and env_bool('MERCADOPAGO_ALLOW_MOCK', True)
+PAYMENT_PIX_ENABLED = env_bool('PAYMENT_PIX_ENABLED', True)
+PAYMENT_CARD_ENABLED = env_bool('PAYMENT_CARD_ENABLED', True)
+PAYMENT_MAX_CARD_ATTEMPTS = 3
+PAYMENT_ABANDONED_MINUTES = 60
+EMAIL_TIMEOUT = 15
 # Validade da cobrança Pix, em minutos.
 PIX_EXPIRATION_MINUTES = 30
 # E-mail do pagador enviado ao Mercado Pago (não coletamos e-mail no checkout).
@@ -388,12 +400,26 @@ WHATSAPP_API_VERSION = os.environ.get('WHATSAPP_API_VERSION', 'v21.0')
 WHATSAPP_DEFAULT_COUNTRY_CODE = os.environ.get('WHATSAPP_DEFAULT_COUNTRY_CODE', '55')
 # Mock ligado automaticamente quando faltam credenciais.
 WHATSAPP_MOCK = not (WHATSAPP_TOKEN and WHATSAPP_PHONE_ID)
+WHATSAPP_MOCK_ALLOWED = DEBUG and env_bool('WHATSAPP_ALLOW_MOCK', True)
+WHATSAPP_STATUS_TEMPLATE = os.environ.get('WHATSAPP_STATUS_TEMPLATE', 'onmenu_status_pedido')
+WHATSAPP_TEMPLATE_LANGUAGE = os.environ.get('WHATSAPP_TEMPLATE_LANGUAGE', 'pt_BR')
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = os.environ.get('WHATSAPP_WEBHOOK_VERIFY_TOKEN', '')
+WHATSAPP_APP_SECRET = os.environ.get('WHATSAPP_APP_SECRET', '')
+CUSTOMER_DATA_RETENTION_DAYS = int(os.environ.get('CUSTOMER_DATA_RETENTION_DAYS', '365'))
+if CUSTOMER_DATA_RETENTION_DAYS <= 0:
+    raise ImproperlyConfigured('CUSTOMER_DATA_RETENTION_DAYS deve ser um número positivo.')
 
 TEST_RUNNER = 'config.test_runner.QuietTestRunner'
 
 # Backups do banco (`manage.py backup_db`).
 BACKUP_ROOT = Path(os.environ.get('DJANGO_BACKUP_ROOT', BASE_DIR / 'backups'))
 BACKUP_KEEP = int(os.environ.get('DJANGO_BACKUP_KEEP', '14'))
+BACKUP_BUCKET = os.environ.get('ONMENU_BACKUP_BUCKET', '')
+BACKUP_ENDPOINT = os.environ.get('ONMENU_BACKUP_ENDPOINT', '')
+BACKUP_REGION = os.environ.get('ONMENU_BACKUP_REGION', 'us-east-1')
+BACKUP_ACCESS_KEY = os.environ.get('ONMENU_BACKUP_ACCESS_KEY', '')
+BACKUP_SECRET_KEY = os.environ.get('ONMENU_BACKUP_SECRET_KEY', '')
+BACKUP_PREFIX = os.environ.get('ONMENU_BACKUP_PREFIX', 'onmenu/').strip('/')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -26,6 +26,7 @@ from .models import (
     Order,
     OrderItem,
     PixPayment,
+    WhatsAppMessage,
 )
 from .selectors import SESSION_ORDERS_KEY
 
@@ -117,7 +118,7 @@ class OrderVisibilityTests(TestCase):
         self.order = Order.objects.create(
             restaurant=self.restaurant,
             customer_name='Ada Lovelace',
-            phone='555-0100',
+            phone='11999990100',
             subtotal=Decimal('30.00'),
         )
 
@@ -187,7 +188,7 @@ class OrderVisibilityTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'payment_method': Order.PaymentMethod.CASH,
             },
             follow=True,
@@ -265,7 +266,7 @@ class DeliveryRulesTests(TestCase):
         data = {
             'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
             'customer_name': 'Ada Lovelace',
-            'phone': '555-0100',
+            'phone': '11999990100',
             'city': self.city.pk,
             'neighborhood': self.neighborhood.pk,
             'address_street': 'Code Street',
@@ -360,7 +361,7 @@ class OrderStatusHistoryTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'payment_method': Order.PaymentMethod.CASH,
             },
         )
@@ -489,8 +490,8 @@ class StaffReportsTests(TestCase):
         self.assertEqual(top[0]['revenue'], Decimal('50.00'))
 
     def test_breakdown_by_payment_method(self):
-        self._order(Decimal('30.00'), payment_method=Order.PaymentMethod.PIX)
-        self._order(Decimal('10.00'), payment_method=Order.PaymentMethod.PIX)
+        self._order(Decimal('30.00'), payment_method=Order.PaymentMethod.PIX, payment_status='paid')
+        self._order(Decimal('10.00'), payment_method=Order.PaymentMethod.PIX, payment_status='paid')
         self._order(Decimal('60.00'), payment_method=Order.PaymentMethod.CASH)
         self.client.force_login(self.staff)
 
@@ -617,7 +618,7 @@ class OrderViewsTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'city': self.city.pk,
                 'neighborhood': self.neighborhood.pk,
                 'address_street': 'Code Street',
@@ -626,13 +627,14 @@ class OrderViewsTests(TestCase):
                 'notes': 'No onions',
                 'payment_method': Order.PaymentMethod.PIX,
                 'customer_cpf': '390.533.447-05',
+                'customer_email': 'cliente@example.com',
             },
         )
 
         order = Order.objects.get()
         self.assertRedirects(
             response,
-            reverse('orders:confirmation', args=[order.order_number]),
+            reverse('orders:payment_resume', args=[order.order_number]),
         )
         self.assertEqual(order.subtotal, Decimal('40.00'))
         # delivery fee = city (4.00) + neighborhood (3.00)
@@ -655,7 +657,7 @@ class OrderViewsTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'address_street': 'Code Street',
                 'address_number': '1',
                 'payment_method': Order.PaymentMethod.PIX,
@@ -676,7 +678,7 @@ class OrderViewsTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.DELIVERY,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'city': other_city.pk,
                 'neighborhood': self.neighborhood.pk,
                 'address_street': 'Code Street',
@@ -697,7 +699,7 @@ class OrderViewsTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Grace Hopper',
-                'phone': '555-0101',
+                'phone': '11999990101',
                 'address': '',
                 'notes': '',
                 'payment_method': Order.PaymentMethod.CASH,
@@ -712,7 +714,7 @@ class OrderViewsTests(TestCase):
         order = Order.objects.create(
             restaurant=self.restaurant,
             customer_name='Katherine Johnson',
-            phone='555-0102',
+            phone='11999990102',
             fulfillment_method=Order.FulfillmentMethod.PICKUP,
             payment_method=Order.PaymentMethod.CARD_ON_DELIVERY,
             subtotal=Decimal('20.00'),
@@ -742,7 +744,7 @@ class OrderViewsTests(TestCase):
             Order.objects.create(
                 restaurant=self.restaurant,
                 customer_name=f'Cliente {i}',
-                phone='555-0102',
+                phone='11999990102',
                 fulfillment_method=Order.FulfillmentMethod.PICKUP,
                 payment_method=Order.PaymentMethod.CASH,
                 subtotal=Decimal('20.00'),
@@ -788,6 +790,7 @@ class OrderViewsTests(TestCase):
             user=customer,
             customer_name='Ada Lovelace',
             phone='41999990000',
+            whatsapp_opt_in=True,
             fulfillment_method=Order.FulfillmentMethod.PICKUP,
             payment_method=Order.PaymentMethod.CASH,
             subtotal=Decimal('20.00'),
@@ -805,8 +808,8 @@ class OrderViewsTests(TestCase):
         self.assertIn('Em preparo', notif.message)
         self.assertFalse(notif.is_read)
         # WhatsApp disparado com o telefone do pedido.
-        mock_send.assert_called_once()
-        self.assertEqual(mock_send.call_args.args[0], '41999990000')
+        mock_send.assert_not_called()
+        self.assertEqual(WhatsAppMessage.objects.get(order=order).order.phone, '41999990000')
 
     @patch('orders.services.notificacoes.whatsapp_service.enviar_texto')
     def test_no_notification_when_status_unchanged(self, mock_send):
@@ -841,6 +844,7 @@ class OrderViewsTests(TestCase):
                 user=customer,
                 customer_name=f'Cliente {i}',
                 phone='41999990000',
+                whatsapp_opt_in=True,
                 fulfillment_method=Order.FulfillmentMethod.PICKUP,
                 payment_method=Order.PaymentMethod.CASH,
                 subtotal=Decimal('20.00'),
@@ -865,7 +869,8 @@ class OrderViewsTests(TestCase):
 
         # Só o pedido que realmente mudou gera notificação/WhatsApp.
         self.assertEqual(Notification.objects.count(), 1)
-        self.assertEqual(mock_send.call_count, 1)
+        self.assertEqual(WhatsAppMessage.objects.count(), 1)
+        mock_send.assert_not_called()
 
     def test_notifications_page_lists_and_marks_read(self):
         customer = User.objects.create_user(username='ada', password='password')
@@ -917,9 +922,10 @@ class PixPaymentTests(TestCase):
         data = {
             'fulfillment_method': Order.FulfillmentMethod.PICKUP,
             'customer_name': 'Ada Lovelace',
-            'phone': '555-0100',
+            'phone': '11999990100',
             'payment_method': Order.PaymentMethod.PIX,
             'customer_cpf': '390.533.447-05',
+                'customer_email': 'cliente@example.com',
         }
         data.update(overrides)
         return self.client.post(
@@ -959,10 +965,10 @@ class PixPaymentTests(TestCase):
         self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
         pix = PixPayment.objects.get()
         self.assertEqual(pix.order_id, order.id)
-        self.assertEqual(pix.external_reference, order.order_number)
+        self.assertEqual(pix.external_reference, order.payment_attempts.get().external_reference)
         self.assertEqual(pix.amount, order.total)
 
-    def test_pix_requires_cpf_but_not_email(self):
+    def test_pix_requires_cpf_with_valid_payer_email(self):
         self._add_item(quantity=1)
         response = self._pix_post(customer_cpf='')
 
@@ -985,8 +991,8 @@ class PixPaymentTests(TestCase):
         self._add_item(quantity=1)
         self._pix_post()
         pix = PixPayment.objects.get()
-        pix.status = PixPayment.Status.APPROVED
-        pix.save(update_fields=['status'])
+        from orders.services import payments
+        payments.apply_provider_info(pix.order.payment_attempts.get(), {'status':'approved'})
 
         response = self.client.get(reverse('orders:pix_status', args=[pix.mp_payment_id]))
         body = response.json()
@@ -1045,7 +1051,7 @@ class CardPaymentTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'payment_method': Order.PaymentMethod.CREDIT_CARD,
             },
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
@@ -1131,7 +1137,7 @@ class CardPaymentTests(TestCase):
         order = Order.objects.create(
             restaurant=self.restaurant,
             customer_name='Grace Hopper',
-            phone='555-0101',
+            phone='11999990101',
             fulfillment_method=Order.FulfillmentMethod.PICKUP,
             payment_method=Order.PaymentMethod.CREDIT_CARD,
             subtotal=Decimal('20.00'),
@@ -1209,7 +1215,7 @@ class AdminNewOrderNotificationTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Grace Hopper',
-                'phone': '555-0101',
+                'phone': '11999990101',
                 'payment_method': Order.PaymentMethod.CASH,
             },
         )
@@ -1230,9 +1236,10 @@ class AdminNewOrderNotificationTests(TestCase):
             {
                 'fulfillment_method': Order.FulfillmentMethod.PICKUP,
                 'customer_name': 'Ada Lovelace',
-                'phone': '555-0100',
+                'phone': '11999990100',
                 'payment_method': Order.PaymentMethod.PIX,
                 'customer_cpf': '390.533.447-05',
+                'customer_email': 'cliente@example.com',
             },
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
         )
@@ -1632,7 +1639,7 @@ class CheckoutThrottleTests(TestCase):
         return {
             'fulfillment_method': Order.FulfillmentMethod.PICKUP,
             'customer_name': 'Ada Lovelace',
-            'phone': '555-0100',
+            'phone': '11999990100',
             'payment_method': Order.PaymentMethod.CASH,
         }
 

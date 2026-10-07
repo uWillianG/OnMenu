@@ -3,6 +3,28 @@ import re
 from django.core.exceptions import ValidationError
 
 
+def validate_cpf(value):
+    digits = re.sub(r'[^0-9]', '', value or '')
+    if len(digits) != 11 or len(set(digits)) == 1:
+        raise ValidationError('CPF inválido.', code='invalid_cpf')
+    for size in (9, 10):
+        total = sum(int(digits[index]) * (size + 1 - index) for index in range(size))
+        check = (total * 10 % 11) % 10
+        if check != int(digits[size]):
+            raise ValidationError('CPF inválido.', code='invalid_cpf')
+    return digits
+
+
+def validate_phone(value):
+    digits = re.sub(r'[^0-9]', '', value or '')
+    if len(digits) in (12, 13) and digits.startswith('55'):
+        digits = digits[2:]
+    if (len(digits) not in (10, 11) or len(set(digits)) == 1
+            or int(digits[:2]) < 11 or digits[2] in '01'):
+        raise ValidationError('Informe um telefone válido com DDD.', code='invalid_phone')
+    return (value or '').strip()
+
+
 class UppercaseValidator:
     """Exige ao menos uma letra maiúscula."""
 

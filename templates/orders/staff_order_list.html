@@ -41,6 +41,15 @@
       </div>
     </div>
 
+    <section class="order-section" aria-label="Pedidos aguardando pagamento">
+      <div class="order-section-head">
+        <h2 class="order-section-title">Aguardando pagamento <span class="order-section-count" id="count-waiting">{{ waiting_count }}</span></h2>
+      </div>
+      <div class="order-cards" id="cards-waiting">
+        {% include 'orders/_staff_order_cards.html' with orders=waiting_orders empty_title='Nenhum pagamento pendente' empty_text='Pedidos online aguardando pagamento aparecem aqui.' %}
+      </div>
+    </section>
+
     <form method="post" id="bulk-form" action="{% url 'orders:staff_orders_bulk_update' %}">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -284,6 +293,10 @@
       var wasPresent = presentNumbers();
 
       activeWrap.innerHTML = data.active_html;
+      var waitingWrap = document.getElementById('cards-waiting');
+      var waitingCount = document.getElementById('count-waiting');
+      if (waitingWrap) waitingWrap.innerHTML = data.waiting_html;
+      if (waitingCount) waitingCount.textContent = data.waiting_count;
       finishedWrap.innerHTML = data.inactive_html;
       if (pagerWrap && typeof data.pager_html === 'string') pagerWrap.innerHTML = data.pager_html;
       if (countActive)  countActive.textContent  = data.active_count;

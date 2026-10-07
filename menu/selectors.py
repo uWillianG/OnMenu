@@ -42,6 +42,8 @@ def get_open_status(restaurant):
       - ``today_hours``: the BusinessHours row for today (or None)
       - ``detail``: a short pt-BR hint, e.g. "Fecha às 22:00" or "Abre seg. às 09:00"
     """
+    if not restaurant.accepting_orders:
+        return {'is_open': False, 'today_hours': None, 'detail': 'Pedidos temporariamente pausados'}
     now = timezone.localtime()
     today = now.weekday()
     current_time = now.time()

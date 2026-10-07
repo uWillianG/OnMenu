@@ -26,9 +26,17 @@ class RestaurantLogoForm(forms.ModelForm):
 class RestaurantInfoForm(forms.ModelForm):
     """Edição dos dados de contato e entrega do estabelecimento (staff)."""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if not isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault('class', 'form-input')
+
     class Meta:
         model = Restaurant
         fields = [
+            'name', 'legal_name', 'registration_number', 'contact_email',
+            'accepting_orders', 'accepts_delivery', 'accepts_pickup',
             'address',
             'phone',
             'whatsapp_number',
@@ -97,6 +105,10 @@ class RestaurantInfoForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        for name in ('minimum_order', 'free_delivery_above'):
+            value = cleaned.get(name)
+            if value is not None and value < 0:
+                self.add_error(name, 'O valor não pode ser negativo.')
         low = cleaned.get('delivery_time_min')
         high = cleaned.get('delivery_time_max')
         if low and high and low > high:

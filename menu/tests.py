@@ -183,6 +183,7 @@ class RestaurantInfoTests(TestCase):
             reverse('menu:edit_restaurant_info'),
             {
                 'address': 'Av. Nova, 999',
+                'name': self.restaurant.name,
                 'phone': '1144445555',
                 'whatsapp_number': '(11) 98888-7777',
                 'delivery_time_min': 20,

@@ -1,7 +1,8 @@
 from django.contrib.auth.models import User
 from django.db import models
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
+import uuid
 
 
 class Profile(models.Model):
@@ -41,6 +42,10 @@ class Profile(models.Model):
         blank=True,
     )
 
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['cpf'], condition=~models.Q(cpf=''),
+                                               name='unique_nonempty_profile_cpf')]
+
     @property
     def handle(self):
         """Nome de usuário sempre exibido com um único '@' na frente."""
@@ -63,6 +68,11 @@ def ensure_profile(sender, instance, created, **kwargs):
     """Garante um Profile para todo usuário criado."""
     if created:
         Profile.objects.get_or_create(user=instance)
+
+
+@receiver(pre_save, sender=User)
+def normalize_account_email(sender, instance, **kwargs):
+    instance.email = (instance.email or '').strip().casefold()
 
 
 class AccessAttempt(models.Model):
@@ -92,3 +102,18 @@ class AccessAttempt(models.Model):
 
     def __str__(self):
         return f'{self.scope}:{self.key} @ {self.created_at:%Y-%m-%d %H:%M:%S}'
+
+
+class DataRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='data_requests')
+    status = models.CharField(max_length=20, choices=[('pending','Pendente'),('completed','Concluída')], default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['created_at']
+        permissions = [('handle_data_request', 'Pode atender solicitações de exclusão de dados')]
+        constraints = [models.UniqueConstraint(fields=['user'], condition=models.Q(status='pending'),
+                                               name='unique_pending_data_request')]

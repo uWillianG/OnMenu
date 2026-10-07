@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block body_class %}layout-staff{% endblock %}
+{% block content %}<div class="page-content"><h1>Preparação para lançamento</h1>
+<section class="detail-card"><h2>Dados e serviços</h2><p>Complete os dados do estabelecimento no painel. As credenciais dos provedores são configuradas no ambiente do servidor.</p>
+{% for check in checks %}<p>{% if check.ok %}✓{% else %}Pendente:{% endif %} {{ check.label }}</p>{% endfor %}
+<a class="btn-primary" href="{% url 'menu:setup_restaurant' %}">Configurar estabelecimento</a><a class="btn-secondary" href="{% url 'orders:delivery_areas' %}">Regiões de entrega</a></section>
+<section class="detail-card"><h2>Operação automática</h2>{% for operation in operations %}<p>{{ operation.name }} — {% if operation.last_error %}{{ operation.last_error }}{% elif operation.last_success_at %}Último sucesso: {{ operation.last_success_at|date:'d/m/Y H:i' }}{% else %}Aguardando execução{% endif %}</p>{% empty %}<p>O serviço de operação ainda não executou as tarefas. Inicie-o conforme o guia de instalação.</p>{% endfor %}</section>
+</div>{% endblock %}

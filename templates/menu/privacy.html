@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Privacidade | {{ restaurant.name|default:'OnMenu' }}{% endblock %}
+{% block content %}
+<div class="page-content"><article class="detail-card">
+  <h1>Privacidade e seus dados</h1>
+  <p>O responsável pelo atendimento neste site é {{ restaurant.legal_name|default:restaurant.name|default:'o estabelecimento apresentado no cardápio' }}{% if restaurant.registration_number %}, identificação {{ restaurant.registration_number }}{% endif %}.</p>
+  <h2>Dados utilizados</h2>
+  <p>Utilizamos nome, telefone, endereço, informações da conta e histórico de pedidos para receber, preparar e entregar sua compra. O CPF é utilizado quando necessário para identificar o pagador. As senhas são armazenadas por meio de hash; o site não armazena o número completo nem o código de segurança do cartão.</p>
+  <p>Os cookies de sessão e de segurança mantêm seu carrinho, login e a proteção dos formulários. Registros de tentativas de acesso ajudam a proteger contas e pedidos.</p>
+  <h2>Serviços utilizados</h2>
+  <p>Quando habilitado, o Mercado Pago processa o pagamento; o Google autentica o acesso por sua conta Google; e a Meta entrega os avisos de WhatsApp solicitados por você. Esses serviços recebem os dados necessários ao recurso escolhido e têm suas próprias políticas. Bibliotecas de interface e de pagamento podem ser carregadas de seus provedores.</p>
+  <h2>Avisos e conservação</h2>
+  <p>Os avisos pelo WhatsApp são opcionais e se referem ao seu pedido. Você pode desativá-los na página de confirmação. Informações de pedidos finalizados são anonimizadas após {{ retention_days }} dia{{ retention_days|pluralize }} pela rotina de conservação configurada pelo responsável. Registros financeiros e de itens podem ser conservados sem identificar o cliente.</p>
+  <h2>Consultar e solicitar exclusão</h2>
+  <p>Na sua conta, você pode exportar seus dados e solicitar a exclusão. O responsável acompanha a solicitação e precisa concluir pedidos em andamento antes de atendê-la.</p>
+  {% if restaurant.contact_email %}<p>Para dúvidas ou solicitações de compras sem conta, escreva para <a href="mailto:{{ restaurant.contact_email }}">{{ restaurant.contact_email }}</a>.</p>{% elif restaurant.phone %}<p>Entre em contato com o estabelecimento pelo telefone <a href="tel:{{ restaurant.phone }}">{{ restaurant.phone }}</a>.</p>{% endif %}
+  <a class="btn-secondary" href="{% url 'accounts:profile' %}">Gerenciar meus dados</a>
+</article></div>
+{% endblock %}

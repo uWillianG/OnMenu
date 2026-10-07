@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block body_class %}layout-staff{% endblock %}
+{% block content %}
+<div class="page-content"><h1>Solicitações de privacidade</h1>
+{% for item in data_requests %}<section class="detail-card">
+  <p>{{ item.user.get_full_name }} · {{ item.user.email }} · {{ item.created_at|date:'d/m/Y H:i' }}</p>
+  <form method="post" action="{% url 'accounts:complete_deletion' item.pk %}">{% csrf_token %}
+    <label><input type="checkbox" name="confirm_delete" required> Confirmo a exclusão da conta e a anonimização dos dados pessoais dos pedidos.</label>
+    <button class="btn-danger" type="submit">Atender solicitação</button>
+  </form>
+</section>{% empty %}<p>Nenhuma solicitação pendente.</p>{% endfor %}</div>
+{% endblock %}

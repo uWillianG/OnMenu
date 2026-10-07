@@ -1,0 +1,210 @@
+{
+  "banco": "SQLite em memoria",
+  "servicos_externos": "simulados",
+  "total": 23,
+  "reproduzidos": 23,
+  "resultados": [
+    {
+      "id": "entrega_retirada_desativadas",
+      "reproduzido": true,
+      "observado": {
+        "delivery": 302,
+        "pickup": 302
+      }
+    },
+    {
+      "id": "restaurante_inativo",
+      "reproduzido": true,
+      "observado": {
+        "http": 302,
+        "pedidos_com_restaurante_inativo": 1
+      }
+    },
+    {
+      "id": "itens_ocultos_e_outro_restaurante",
+      "reproduzido": true,
+      "observado": {
+        "categoria_inativa_vendida": true,
+        "item_de_outro_restaurante_vendido": true
+      }
+    },
+    {
+      "id": "complemento_obrigatorio_removido",
+      "reproduzido": true,
+      "observado": {
+        "pedido_sem_complemento_obrigatorio": "OM-1"
+      }
+    },
+    {
+      "id": "falha_pix_cria_pedidos_duplicados",
+      "reproduzido": true,
+      "observado": {
+        "http": 502,
+        "carrinho_persistido": true,
+        "pedidos_sem_cobranca_apos_retentativa": 2,
+        "resposta_sem_identificador_do_pedido": true
+      }
+    },
+    {
+      "id": "pix_recarregado_sem_retomada",
+      "reproduzido": true,
+      "observado": {
+        "checkout_recarregado": 302,
+        "destino": "/cart/",
+        "confirmacao_sem_qr_ou_acao_retomar_pagamento": true
+      }
+    },
+    {
+      "id": "cartao_recusado_retentativa",
+      "reproduzido": true,
+      "observado": {
+        "primeira_tentativa": "rejected",
+        "checkout_da_retentativa": 302,
+        "destino": "/cart/",
+        "carrinho_vazio": true
+      }
+    },
+    {
+      "id": "fila_online_sem_pagamento",
+      "reproduzido": true,
+      "observado": {
+        "pedido_online_pendente_na_fila": true,
+        "assinatura_inalterada_apos_pagamento": true,
+        "cartao_da_fila_sem_status_pagamento": true
+      }
+    },
+    {
+      "id": "estorno_pedido_continua_pago",
+      "reproduzido": true,
+      "observado": {
+        "pedido": "paid",
+        "pagamento": "refunded"
+      }
+    },
+    {
+      "id": "pix_expirado_sem_consulta",
+      "reproduzido": true,
+      "observado": {
+        "polling": "expired",
+        "consultas_ao_provedor_no_polling": 0,
+        "consultas_ao_provedor_no_job": 0
+      }
+    },
+    {
+      "id": "cobranca_pedido_cancelado",
+      "reproduzido": true,
+      "observado": {
+        "pedido_cancelado": true,
+        "cobranca_aceita": true
+      }
+    },
+    {
+      "id": "pix_em_pedido_dinheiro",
+      "reproduzido": true,
+      "observado": {
+        "metodo_pedido": "cash",
+        "pix_criado": true
+      }
+    },
+    {
+      "id": "cartao_sem_limite_servidor",
+      "reproduzido": true,
+      "observado": {
+        "tentativas_no_mesmo_pedido": 5,
+        "http": [
+          200,
+          200,
+          200,
+          200,
+          200
+        ]
+      }
+    },
+    {
+      "id": "parcelas_invalidas_http500",
+      "reproduzido": true,
+      "observado": {
+        "parcelas_nao_numericas": "abc",
+        "http": 500
+      }
+    },
+    {
+      "id": "categoria_duplicada_http500",
+      "reproduzido": true,
+      "observado": {
+        "nome_duplicado": "Lanches",
+        "http": 500
+      }
+    },
+    {
+      "id": "relatorio_conta_pix_nao_pago",
+      "reproduzido": true,
+      "observado": {
+        "pagamento": "pending",
+        "faturamento_reportado": "20"
+      }
+    },
+    {
+      "id": "cartao_concorrente_duas_cobrancas",
+      "reproduzido": true,
+      "observado": {
+        "intercalacao_simulada": true,
+        "cobrancas_solicitadas": [
+          "CARD-1",
+          "CARD-2"
+        ],
+        "registros_de_pagamento_preservados": 1
+      }
+    },
+    {
+      "id": "chaves_idempotencia",
+      "reproduzido": true,
+      "observado": {
+        "cartao_mesma_tentativa_chave_diferente": true,
+        "pix_recriacao_mesma_chave_do_pedido": true
+      }
+    },
+    {
+      "id": "3ds_descarta_creq",
+      "reproduzido": true,
+      "observado": {
+        "requer_3ds": true,
+        "creq_descartado": true
+      }
+    },
+    {
+      "id": "cadastro_concorrente_email_duplicado",
+      "reproduzido": true,
+      "observado": {
+        "intercalacao_simulada": true,
+        "contas_com_mesmo_email": 2,
+        "login_por_email": false
+      }
+    },
+    {
+      "id": "checkout_dados_cliente_invalidos",
+      "reproduzido": true,
+      "observado": {
+        "telefone": "abc",
+        "cpf": "00000000000",
+        "checkout_aceitou": true
+      }
+    },
+    {
+      "id": "quantidade_excessiva_http500",
+      "reproduzido": true,
+      "observado": {
+        "quantidade_sem_teto": true,
+        "checkout_http": 500
+      }
+    },
+    {
+      "id": "whatsapp_ddd55",
+      "reproduzido": true,
+      "observado": {
+        "numero_local_com_ddd_55": true,
+        "ddi_55_nao_adicionado": true
+      }
+    }
+  ]
+}

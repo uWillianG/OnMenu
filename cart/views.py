@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -8,7 +9,7 @@ from menu.models import MenuItem
 from menu.selectors import get_current_restaurant
 
 from .cart import Cart
-from .validators import clean_options
+from .validators import clean_options, is_sellable
 
 
 def cart_detail(request):
@@ -68,7 +69,7 @@ def cart_add(request, item_id):
     cart = Cart(request)
     item = get_object_or_404(MenuItem, pk=item_id)
 
-    if not item.is_available:
+    if not is_sellable(item, get_current_restaurant()):
         messages.warning(request, f'{item.name} está indisponível no momento.')
         return redirect(_next_url(request))
 
@@ -79,12 +80,11 @@ def cart_add(request, item_id):
 
     notes = request.POST.get('item_notes', '').strip()
 
-    cart.add(
-        item,
-        quantity=_positive_int(request.POST.get('quantity'), 1),
-        options=options,
-        notes=notes,
-    )
+    try:
+        cart.add(item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options, notes=notes)
+    except ValidationError as exc:
+        messages.warning(request, exc.messages[0])
+        return redirect(_next_url(request))
     messages.success(request, f'{item.name} foi adicionado ao carrinho.')
     return redirect(_next_url(request))
 
@@ -99,7 +99,7 @@ def cart_edit(request, line_id):
         return redirect('cart:cart_detail')
 
     item = get_object_or_404(MenuItem, pk=entry['item_id'])
-    if not item.is_available:
+    if not is_sellable(item, get_current_restaurant()):
         messages.warning(request, f'{item.name} está indisponível no momento.')
         return redirect('cart:cart_detail')
 
@@ -110,13 +110,11 @@ def cart_edit(request, line_id):
 
     notes = request.POST.get('item_notes', '').strip()
 
-    cart.replace(
-        line_id,
-        item,
-        quantity=_positive_int(request.POST.get('quantity'), 1),
-        options=options,
-        notes=notes,
-    )
+    try:
+        cart.replace(line_id, item, quantity=_positive_int(request.POST.get('quantity'), 1), options=options, notes=notes)
+    except ValidationError as exc:
+        messages.warning(request, exc.messages[0])
+        return redirect('cart:cart_detail')
     messages.success(request, f'{item.name} atualizado.')
     return redirect('cart:cart_detail')
 
@@ -130,7 +128,11 @@ def cart_update(request, line_id):
         cart.remove(line_id)
         messages.info(request, 'Item removido do carrinho.')
     else:
-        cart.set_quantity(line_id, quantity)
+        try:
+            cart.set_quantity(line_id, quantity)
+        except ValidationError as exc:
+            messages.warning(request, exc.messages[0])
+            return redirect('cart:cart_detail')
         messages.success(request, 'Quantidade atualizada.')
 
     return redirect('cart:cart_detail')

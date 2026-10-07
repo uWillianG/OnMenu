@@ -1,5 +1,10 @@
 # OnMenu
 
+As correções de preparação para lançamento estão documentadas em
+[`docs/auditoria/CORRECOES.md`](docs/auditoria/CORRECOES.md). Para preencher os
+dados/credenciais e ativar os serviços, siga
+[`docs/CONFIGURACAO_FINAL.md`](docs/CONFIGURACAO_FINAL.md).
+
 Cardápio digital para delivery e retirada, em Django. Um restaurante ativo por
 instalação: cardápio público, carrinho, checkout com Pix e cartão (Mercado
 Pago), acompanhamento do pedido e painel para a equipe.
@@ -21,6 +26,11 @@ Abra `http://127.0.0.1:8000/` para o cardápio. Painel da equipe em
 Sem `.env` o projeto roda em modo de desenvolvimento: SQLite, `DEBUG=True`,
 pagamentos em **mock** (QR de exemplo, sem cobrança), WhatsApp e e-mail apenas
 no log/console. Copie `.env.example` para `.env` para ligar cada integração.
+
+Em produção, os meios online precisam de credenciais completas ou ser
+desativados explicitamente. Pagamentos simulados e o formulário manual de teste
+não são utilizados com `DEBUG=False`. Pedidos pendentes podem ser retomados pela
+página de confirmação, mantendo o mesmo pedido e o histórico de tentativas.
 
 ## Testes
 

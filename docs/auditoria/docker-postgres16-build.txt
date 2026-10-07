@@ -1,0 +1,48 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.32kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.12-slim
+#2 DONE 1.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 265B done
+#3 DONE 0.0s
+
+#4 [1/7] FROM docker.io/library/python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
+#4 resolve docker.io/library/python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 2.35MB 0.1s done
+#5 DONE 0.1s
+
+#6 [4/7] COPY requirements.txt requirements-production.txt ./
+#6 CACHED
+
+#7 [5/7] RUN pip install --no-cache-dir -r requirements-production.txt
+#7 CACHED
+
+#8 [2/7] WORKDIR /app
+#8 CACHED
+
+#9 [3/7] RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates     && mkdir -p /usr/share/postgresql-common/pgdg     && curl --fail --silent --show-error -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc     && . /etc/os-release     && printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' "$VERSION_CODENAME" > /etc/apt/sources.list.d/pgdg.list     && apt-get update && apt-get install -y --no-install-recommends "postgresql-client-16"     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [6/7] RUN useradd --create-home --uid 10001 onmenu && mkdir -p /data/media /data/backups && chown -R onmenu:onmenu /data /app
+#10 CACHED
+
+#11 [7/7] COPY --chown=onmenu:onmenu . .
+#11 DONE 0.1s
+
+#12 exporting to image
+#12 exporting layers 0.1s done
+#12 exporting manifest sha256:149dd0b2463e93352333288d90452ee2c9055f7de45acf957b53841dd2c46e1c done
+#12 exporting config sha256:ecc8496ddab00ac6ec06a94b13bf4e88032d63f1f7c50ca03f7ddbd4a472a5cc done
+#12 exporting attestation manifest sha256:723b675a38444a5ab98fe54e03a9411f1cf897ee069f21bab81b6248ad75ea12 0.0s done
+#12 exporting manifest list sha256:349badb83f1be32e0dd54344cc3145b7c72925de2d3dfffd987974832547af14 done
+#12 naming to docker.io/library/onmenu-audit:postgres16 done
+#12 unpacking to docker.io/library/onmenu-audit:postgres16 0.1s done
+#12 DONE 0.3s

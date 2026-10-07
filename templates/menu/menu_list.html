@@ -6,6 +6,7 @@
 {% block title %}{% if restaurant %}{{ restaurant.name }}{% else %}Cardápio{% endif %} | OnMenu{% endblock %}
 
 {% block content %}
+{% if not restaurant and user.is_staff %}<div class="page-content"><a class="btn-primary" href="{% url 'menu:setup_restaurant' %}">Configurar meu estabelecimento</a></div>{% endif %}
 {% if restaurant %}
 
   {# ── Restaurant hero ── #}

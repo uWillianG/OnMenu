@@ -7,6 +7,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, PasswordResetView
 from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import JsonResponse
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -112,11 +115,15 @@ def signup(request):
         throttle.record(throttle.SIGNUP, ip)
         form = SignupForm(request.POST)
         if form.is_valid():
-            user = form.save()
+            try:
+                user = form.save()
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
             # Com múltiplos backends configurados, o login automático precisa
             # saber qual usar para autenticar a sessão recém-criada.
-            login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
-            return redirect(_safe_next(request, next_url))
+                login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
+                return redirect(_safe_next(request, next_url))
     else:
         form = SignupForm()
 
@@ -183,6 +190,9 @@ def google_callback(request):
         return redirect('accounts:login')
 
     user, created = _get_or_create_google_user(email, userinfo)
+    if not user.is_active:
+        messages.error(request, 'Esta conta está inativa.')
+        return redirect('accounts:login')
     login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
     if created:
         messages.success(
@@ -193,12 +203,14 @@ def google_callback(request):
     return redirect(_safe_next(request, next_url))
 
 
+@transaction.atomic
 def _get_or_create_google_user(email, userinfo):
     """Casa por e-mail uma conta existente ou cria uma nova (sem CPF/telefone).
 
     Contas criadas via Google ficam sem senha utilizável (``set_unusable_password``)
     e sem CPF/telefone — esses dados são coletados depois, no checkout.
     """
+    User.objects.filter(pk=-1).update(email=F('email'))
     user = User.objects.filter(email__iexact=email).order_by('id').first()
     if user:
         return user, False
@@ -215,7 +227,14 @@ def _get_or_create_google_user(email, userinfo):
         last_name=last,
     )
     user.set_unusable_password()
-    user.save()  # o signal post_save cria o Profile (CPF/telefone em branco).
+    try:
+        with transaction.atomic():
+            user.save()
+    except IntegrityError:
+        existing = User.objects.filter(email__iexact=email).first()
+        if not existing:
+            raise
+        return existing, False
     return user, True
 
 
@@ -238,9 +257,13 @@ def profile(request):
         else:
             form = ProfileForm(request.POST, instance=request.user)
             if form.is_valid():
-                form.save()
-                messages.success(request, 'Dados atualizados com sucesso.')
-                return redirect('accounts:profile')
+                try:
+                    form.save()
+                except IntegrityError:
+                    form.add_error('email', 'Já existe uma conta com este e-mail.')
+                else:
+                    messages.success(request, 'Dados atualizados com sucesso.')
+                    return redirect('accounts:profile')
 
     return render(
         request,

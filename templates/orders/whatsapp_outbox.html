@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block body_class %}layout-staff{% endblock %}
+{% block title %}Avisos de WhatsApp | OnMenu{% endblock %}
+{% block content %}<div class="page-content"><h1>Avisos de WhatsApp</h1>
+{% for delivery in deliveries %}<section class="detail-card">
+  <p><a href="{% url 'orders:staff_order_detail' delivery.order.order_number %}">{{ delivery.order.order_number }}</a> — {{ delivery.get_status_display }} · {{ delivery.created_at|date:'d/m/Y H:i' }}</p>
+  {% if delivery.last_error %}<p>{{ delivery.last_error }}</p>{% endif %}
+  {% if delivery.status == 'failed' or delivery.status == 'uncertain' %}
+    <form method="post" action="{% url 'orders:whatsapp_retry' delivery.pk %}">{% csrf_token %}
+      <label><input type="checkbox" name="confirm_retry" required> Verifiquei no provedor que a mensagem pode ser reenviada.</label>
+      <button class="btn-secondary">Reenviar aviso</button>
+    </form>
+  {% endif %}
+</section>{% empty %}<p>Nenhum aviso registrado. Os avisos são enviados somente quando o cliente os solicita no checkout.</p>{% endfor %}</div>{% endblock %}

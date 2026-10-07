@@ -3,11 +3,11 @@
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
-from django.db.models import Avg, Count, Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models import Avg, Count, Q, Sum, OuterRef, Subquery, DecimalField, Value, F, ExpressionWrapper, Case, When
+from django.db.models.functions import TruncDate, Coalesce, Least, Greatest
 from django.utils import timezone
 
-from .models import Neighborhood, Order, OrderItem
+from .models import Neighborhood, Order, OrderItem, PaymentAttempt
 
 
 def local_day_bounds(start, end=None):
@@ -79,24 +79,41 @@ def resolve_report_period(period):
 def get_sales_report(start, end):
     """Números de venda do período (datas locais, inclusivas nas duas pontas).
 
-    Pedidos cancelados ficam de fora: não viraram receita. Pagamentos ainda
-    pendentes (dinheiro, cartão na entrega) contam, porque o pedido foi feito.
+    Receita usa pagamentos confirmados; valores offline ainda a receber ficam
+    separados. Estornos de cobranças duplicadas não reduzem a venda válida.
     """
     first, last = local_day_bounds(start, end)
     orders = Order.objects.filter(
         created_at__gte=first,
         created_at__lte=last,
     ).exclude(status=Order.Status.CANCELLED)
+    money = DecimalField(max_digits=12, decimal_places=2)
+    refunds = PaymentAttempt.objects.filter(order_id=OuterRef('pk')).values('order_id').annotate(
+        amount=Sum('refunded_amount')).values('amount')[:1]
+    orders = orders.annotate(refunded_total=Coalesce(Subquery(refunds, output_field=money), Value(Decimal('0')), output_field=money))
+    online = Q(payment_method__in=['pix', 'credit_card'])
+    collected = PaymentAttempt.objects.filter(order_id=OuterRef('pk'), status='approved').values('order_id').annotate(
+        amount=Sum(ExpressionWrapper(F('amount')-F('refunded_amount'), output_field=money))).values('amount')[:1]
+    orders = orders.annotate(collected_total=Subquery(collected, output_field=money))
+    orders = orders.annotate(net_total=Case(
+        When(online & Q(collected_total__isnull=False),
+             then=Least(F('total'), Greatest(Value(Decimal('0')), F('collected_total')))),
+        default=F('total'), output_field=money))
+    pending_online = orders.filter(online).exclude(payment_status__in=Order.PAID_STATUSES).exclude(payment_status__in=['refunded','charged_back'])
+    receivable = orders.exclude(online).filter(status__in=Order.ACTIVE_STATUSES).exclude(payment_status__in=Order.PAID_STATUSES)
+    eligible = orders.exclude(payment_status__in=['refunded', 'charged_back', 'cancelled']).filter(
+        ~online | Q(payment_status__in=Order.PAID_STATUSES))
+    received = eligible.filter(Q(payment_status__in=Order.PAID_STATUSES) | Q(status=Order.Status.DELIVERED))
 
-    totals = orders.aggregate(
-        revenue=Sum('total'),
+    totals = received.aggregate(
+        revenue=Sum('net_total'),
         items_revenue=Sum('subtotal'),
         delivery_revenue=Sum('delivery_fee'),
         order_count=Count('id'),
         average_ticket=Avg('total'),
     )
     revenue = totals['revenue'] or Decimal('0.00')
-    order_count = totals['order_count'] or 0
+    order_count = eligible.count()
 
     cancelled_count = Order.objects.filter(
         created_at__gte=first,
@@ -108,15 +125,19 @@ def get_sales_report(start, end):
         'start': start,
         'end': end,
         'revenue': revenue,
+        'refunded': orders.aggregate(total=Sum('refunded_total'))['total'] or Decimal('0'),
+        'receivable': receivable.aggregate(total=Sum('total'))['total'] or Decimal('0'),
+        'online_pending': pending_online.aggregate(total=Sum('total'))['total'] or Decimal('0'),
+        'online_pending_count': pending_online.count(),
         'items_revenue': totals['items_revenue'] or Decimal('0.00'),
         'delivery_revenue': totals['delivery_revenue'] or Decimal('0.00'),
         'order_count': order_count,
-        'average_ticket': totals['average_ticket'] or Decimal('0.00'),
+        'average_ticket': eligible.aggregate(average=Avg('total'))['average'] or Decimal('0.00'),
         'cancelled_count': cancelled_count,
-        'daily': _daily_series(orders, start, end),
-        'top_items': _top_items(orders),
-        'by_payment': _breakdown(orders, 'payment_method', Order.PaymentMethod),
-        'by_fulfillment': _breakdown(orders, 'fulfillment_method', Order.FulfillmentMethod),
+        'daily': _daily_series(received, start, end),
+        'top_items': _top_items(eligible),
+        'by_payment': _breakdown(received, 'payment_method', Order.PaymentMethod),
+        'by_fulfillment': _breakdown(eligible, 'fulfillment_method', Order.FulfillmentMethod),
     }
 
 
@@ -126,7 +147,7 @@ def _daily_series(orders, start, end):
         orders
         .annotate(day=TruncDate('created_at'))
         .values('day')
-        .annotate(revenue=Sum('total'), order_count=Count('id'))
+        .annotate(revenue=Sum('net_total'), order_count=Count('id'))
     )
     by_day = {row['day']: row for row in rows}
 
@@ -173,7 +194,7 @@ def _top_items(orders):
 def _breakdown(orders, field, choices):
     """Distribuição dos pedidos por um campo com choices (com % do total)."""
     rows = orders.values(field).annotate(
-        order_count=Count('id'), revenue=Sum('total'),
+        order_count=Count('id'), revenue=Sum('net_total'),
     )
     labels = dict(choices.choices)
     total = sum(row['order_count'] for row in rows) or 1

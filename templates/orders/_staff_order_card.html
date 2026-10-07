@@ -12,6 +12,7 @@
   </div>
   <div class="order-card-right">
     <span class="status-pill {{ order.status }}">{{ order.status_display }}</span>
+    <span class="pay-badge {% if order.is_paid %}is-paid{% endif %}">{{ order.get_payment_status_display }}</span>
     <span class="order-total">{{ currency_symbol }} {{ order.total|floatformat:2 }}</span>
     <button type="button" class="card-icon-btn card-view-btn"
             data-summary-url="{% url 'orders:staff_order_summary' order.order_number %}"

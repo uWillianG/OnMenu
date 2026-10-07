@@ -1,11 +1,22 @@
 from django.urls import path
 
 from . import views
+from .views.whatsapp import webhook_whatsapp, outbox, retry_message
+from .views.areas import delivery_areas, edit_delivery_area
 
 app_name = 'orders'
 
 urlpatterns = [
+    path('staff/whatsapp/', outbox, name='whatsapp_outbox'),
+    path('staff/whatsapp/<uuid:message_id>/retry/', retry_message, name='whatsapp_retry'),
+    path('staff/entrega/', delivery_areas, name='delivery_areas'),
+    path('staff/entrega/<str:kind>/<int:pk>/', edit_delivery_area, name='edit_delivery_area'),
+    path('orders/<str:order_number>/whatsapp/stop/', views.stop_whatsapp, name='stop_whatsapp'),
+    path('webhook/whatsapp/', webhook_whatsapp, name='webhook_whatsapp'),
     path('orders/checkout/', views.checkout, name='checkout'),
+    path('orders/<str:order_number>/payment/', views.payment_resume, name='payment_resume'),
+    path('orders/<str:order_number>/payment/state/', views.payment_state, name='payment_state'),
+    path('orders/<str:order_number>/payment/change/', views.payment_change, name='payment_change'),
     path(
         'orders/confirmation/<str:order_number>/',
         views.confirmation,
@@ -23,6 +34,7 @@ urlpatterns = [
     path('webhook/pix/', views.webhook_pix, name='webhook_pix'),
     path('webhook/cartao/', views.webhook_card, name='webhook_card'),
     path('staff/orders/', views.staff_order_list, name='staff_order_list'),
+    path('staff/orders/<str:order_number>/refund/', views.staff_order_refund, name='staff_order_refund'),
     path('staff/relatorios/', views.staff_reports, name='staff_reports'),
     path('staff/orders/feed/', views.staff_orders_feed, name='staff_orders_feed'),
     path(

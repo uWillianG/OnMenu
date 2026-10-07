@@ -23,6 +23,12 @@
           <ul class="errorlist">{% for e in form.non_field_errors %}<li>{{ e }}</li>{% endfor %}</ul>
         {% endif %}
 
+        <div class="form-field"><label class="form-label" for="{{ form.name.id_for_label }}">Nome do estabelecimento</label>{{ form.name }}{{ form.name.errors }}</div>
+        <div class="form-field"><label class="form-label" for="{{ form.legal_name.id_for_label }}">{{ form.legal_name.label }}</label>{{ form.legal_name }}{{ form.legal_name.errors }}</div>
+        <div class="form-field"><label class="form-label" for="{{ form.registration_number.id_for_label }}">{{ form.registration_number.label }}</label>{{ form.registration_number }}{{ form.registration_number.errors }}</div>
+        <div class="form-field"><label class="form-label" for="{{ form.contact_email.id_for_label }}">{{ form.contact_email.label }}</label>{{ form.contact_email }}{{ form.contact_email.errors }}</div>
+        <div class="form-field"><label>{{ form.accepting_orders }} Receber pedidos agora</label><label>{{ form.accepts_delivery }} Oferecer entrega</label><label>{{ form.accepts_pickup }} Oferecer retirada</label></div>
+
         <div class="form-field">
           <label class="form-label" for="{{ form.address.id_for_label }}">{{ form.address.label }}</label>
           {{ form.address }}
@@ -78,7 +84,7 @@
         </div>
 
         <div class="hours-form-actions">
-          <a class="btn-secondary" href="{% url 'menu:restaurant_info' %}">Cancelar</a>
+          <a class="btn-secondary" href="{% url 'menu:menu_list' %}">Cancelar</a>
           <button type="submit" class="btn-primary">Salvar alterações</button>
         </div>
       </form>

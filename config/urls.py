@@ -19,8 +19,11 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.static import serve
+from .views import health, launch_status
 
 urlpatterns = [
+    path('health/', health, name='health'),
+    path('staff/lancamento/', launch_status, name='launch_status'),
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('', include('menu.urls')),
